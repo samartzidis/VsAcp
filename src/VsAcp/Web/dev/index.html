@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>VsAcp chat UI (dev harness)</title>
+<style>
+  /* a stand-in for Assets/chat-template.html: same variables and layout */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg-primary); color: var(--text-primary);
+    font-family: 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.5; word-wrap: break-word; overflow-wrap: break-word; }
+  #spa-root { display: flex; flex-direction: column; height: 100%; }
+</style>
+<!-- the same vendor scripts the real page embeds -->
+<script src="/vendor/showdown.min.js"></script>
+<script src="/vendor/highlight.min.js"></script>
+</head>
+<body>
+<div id="spa-root"></div>
+<script type="module" src="./mockHost.ts"></script>
+<script type="module" src="../src/main.tsx"></script>
+</body>
+</html>

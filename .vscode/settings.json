@@ -1,0 +1,6 @@
+{
+    "dotnet.defaultSolution": "VsAcp.slnx",
+    "diffEditor.renderSideBySide": false,
+    "diffEditor.codeLens": true,
+    "vsacp.vsEdition": "Enterprise"
+}

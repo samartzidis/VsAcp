@@ -1,0 +1,197 @@
+<UserControl x:Class="VsAcp.ToolWindows.TabbedChatControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0">
+
+    <UserControl.Resources>
+        <Style x:Key="TabCloseButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static vs:VsBrushes.GrayTextKey}}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Padding" Value="3,1"/>
+            <Setter Property="Margin" Value="6,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Visibility" Value="Hidden"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="3" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#30FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="NewTabButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static vs:VsBrushes.GrayTextKey}}"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Padding" Value="8,2"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="ToolTip" Value="New session"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#18FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="{DynamicResource {x:Static vs:VsBrushes.ToolWindowBackgroundKey}}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!--
+            Tab strip. The separator line between strip and content is the bottom pixel of this cell, drawn BEHIND
+            the tabs: inactive tabs are transparent so it shows under them, the active tab's opaque background covers
+            it so the tab merges with the content like in the VS editor. (A bottom border on the strip itself cannot
+            be overdrawn by a tab: the ScrollViewer around the tabs clips them.)
+        -->
+        <Grid Grid.Row="0"
+              Background="{DynamicResource {x:Static vs:VsBrushes.CommandBarGradientBeginKey}}">
+            <Border VerticalAlignment="Bottom"
+                    Height="1"
+                    Background="{DynamicResource {x:Static vs:VsBrushes.CommandBarBorderKey}}"/>
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Content="+"
+                        Style="{StaticResource NewTabButton}"
+                        Click="NewTab_Click"/>
+                <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Disabled"
+                              CanContentScroll="True">
+                    <ItemsControl x:Name="TabStrip"
+                                  ItemsSource="{Binding Sessions}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <!--
+                                    VS-style tab with rounded top corners.
+                                    Active tab: body-colour background and no bottom border, so it covers the separator line
+                                    drawn behind the strip and merges with the content.
+                                    Inactive tab: transparent, so the separator line shows under it.
+                                -->
+                                <Border x:Name="TabBorder"
+                                        Margin="0,0,0,0"
+                                        Padding="10,5,6,5"
+                                        Cursor="Hand"
+                                        BorderThickness="1,1,1,1"
+                                        BorderBrush="{DynamicResource {x:Static vs:VsBrushes.CommandBarBorderKey}}"
+                                        CornerRadius="6,6,0,0"
+                                        Background="Transparent"
+                                        PreviewMouseLeftButtonDown="Tab_MouseLeftButtonDown">
+                                    <Border.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Rename" Click="RenameTab_Click"/>
+                                        </ContextMenu>
+                                    </Border.ContextMenu>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="TabText"
+                                                   Text="{Binding Name, Mode=OneWay}"
+                                                   Foreground="{DynamicResource {x:Static vs:VsBrushes.WindowTextKey}}"
+                                                   FontSize="12"
+                                                   VerticalAlignment="Center"
+                                                   MaxWidth="150"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBox x:Name="RenameBox"
+                                                 Visibility="Collapsed"
+                                                 FontSize="12"
+                                                 MinWidth="120"
+                                                 MaxWidth="150"
+                                                 MaxLength="80"
+                                                 VerticalAlignment="Center"
+                                                 Background="{DynamicResource {x:Static vs:VsBrushes.ComboBoxBackgroundKey}}"
+                                                 Foreground="{DynamicResource {x:Static vs:VsBrushes.WindowTextKey}}"
+                                                 IsVisibleChanged="RenameBox_IsVisibleChanged"
+                                                 KeyDown="RenameBox_KeyDown"
+                                                 LostKeyboardFocus="RenameBox_LostKeyboardFocus"/>
+                                        <Button x:Name="CloseBtn"
+                                                Content="&#10005;"
+                                                Style="{StaticResource TabCloseButton}"
+                                                Click="CloseTab_Click"
+                                                Tag="{Binding}"/>
+                                    </StackPanel>
+                                </Border>
+                                <DataTemplate.Triggers>
+                                    <!-- Renaming in place: the edit box replaces the title text -->
+                                    <DataTrigger Binding="{Binding IsRenaming}" Value="True">
+                                        <Setter TargetName="TabText" Property="Visibility" Value="Collapsed"/>
+                                        <Setter TargetName="RenameBox" Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <!-- Active tab: tool-window background and no bottom border, covering the strip line -->
+                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                        <Setter TargetName="TabBorder"
+                                                Property="Background"
+                                                Value="{DynamicResource {x:Static vs:VsBrushes.ToolWindowBackgroundKey}}"/>
+                                        <Setter TargetName="TabBorder"
+                                                Property="BorderThickness"
+                                                Value="1,1,1,0"/>
+                                        <Setter TargetName="TabBorder"
+                                                Property="Padding"
+                                                Value="10,6,6,6"/>
+                                        <Setter TargetName="CloseBtn" Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <!-- Inactive tab: muted text, no outline (the VS editor draws none either) -->
+                                    <DataTrigger Binding="{Binding IsActive}" Value="False">
+                                        <Setter TargetName="TabText"
+                                                Property="Opacity"
+                                                Value="0.6"/>
+                                        <Setter TargetName="TabBorder"
+                                                Property="BorderThickness"
+                                                Value="0"/>
+                                    </DataTrigger>
+                                    <!--
+                                        Inactive tab hovered. The hover is read from this tab's own border by name: a
+                                        RelativeSource AncestorType=Border here would find the tab strip's border (a
+                                        template's ancestors start above the whole tab), so hovering anywhere on the
+                                        strip lit up every inactive tab.
+                                    -->
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding IsActive}" Value="False"/>
+                                            <Condition Binding="{Binding IsMouseOver, ElementName=TabBorder}" Value="True"/>
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter TargetName="TabText" Property="Opacity" Value="1.0"/>
+                                        <Setter TargetName="TabBorder" Property="Background" Value="#18FFFFFF"/>
+                                        <Setter TargetName="CloseBtn" Property="Visibility" Value="Visible"/>
+                                    </MultiDataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Grid>
+
+        <!-- Content area: hosts ChatSessionControls, toggled by visibility -->
+        <Grid x:Name="ContentArea" Grid.Row="1"/>
+    </Grid>
+</UserControl>

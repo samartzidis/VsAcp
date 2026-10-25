@@ -1,0 +1,11 @@
+<UserControl x:Class="VsAcp.ToolWindows.ChatSessionControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:VsAcp.Controls">
+
+    <!-- The whole chat UI is one WebView2 page: message list, banners, status bars and the composer
+         (Assets/chat-template.html + the Preact app in Web/). WPF only hosts it. -->
+    <DockPanel x:Name="RootPanel" Background="Transparent">
+        <controls:ChatWebView x:Name="ChatWebView" />
+    </DockPanel>
+</UserControl>

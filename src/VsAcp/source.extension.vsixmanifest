@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011"
+                 xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
+  <Metadata>
+    <Identity Id="VsAcp.e5729d8a-9504-49b3-8d22-403148238d88"
+              Version="1.0.0"
+              Language="en-US"
+              Publisher="George Samartzidis" />
+    <DisplayName>Visual Studio ACP Agent</DisplayName>
+    <Description xml:space="preserve">Visual Studio ACP Agent supporting Cursor, Claude Code, and other ACP compliant agents.</Description>
+    <MoreInfo>https://github.com/samartzidis/VsAcp</MoreInfo>
+    <Icon>Resources\Icon.png</Icon>
+    <Tags>ai,acp,claude,cursor</Tags>
+  </Metadata>
+  <Installation>
+    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.14,)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+  </Installation>
+  <Prerequisites>
+    <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor"
+                  Version="[17.14,)"
+                  DisplayName="Visual Studio core editor" />
+  </Prerequisites>
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="Project" d:ProjectName="VsAcp" Path="|VsAcp;PkgdefProjectOutputGroup|" />
+    <Asset Type="Microsoft.VisualStudio.MefComponent" d:Source="Project" d:ProjectName="VsAcp" Path="|VsAcp|" />
+  </Assets>
+</PackageManifest>

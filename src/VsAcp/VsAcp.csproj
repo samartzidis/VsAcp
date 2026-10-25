@@ -1,0 +1,128 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <UseWPF>true</UseWPF>
+
+    <GeneratePkgDefFile>true</GeneratePkgDefFile>
+    <!-- Official SDK-style VSIX support (VSSDK.BuildTools 18.5+): imports Microsoft.VsSDK.targets and sets VSIX defaults (no deploy on build). -->
+    <VSSDKBuildToolsAutoSetup>true</VSSDKBuildToolsAutoSetup>
+    <!-- AutoSetup defaults this to true; keep registering the package by assembly name, found via [ProvideBindingPath]. -->
+    <UseCodebase>false</UseCodebase>
+
+    <!-- Auto-generate binding redirects for all referenced assemblies -->
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+
+    <!-- Include all dependency assemblies in VSIX (override VSSDK deny-list) -->
+    <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+    <IncludeDebugSymbolsInVSIXContainer>false</IncludeDebugSymbolsInVSIXContainer>
+    <IncludeDebugSymbolsInLocalVSIXDeployment>true</IncludeDebugSymbolsInLocalVSIXDeployment>
+
+    <!-- The Web UI (Preact/Vite) lives under Web\; never glob its dependencies or build output into the project. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);Web\node_modules\**;Web\dist\**;Web\e2e\.out\**</DefaultItemExcludes>
+    <WebDir>$(MSBuildProjectDirectory)\Web\</WebDir>
+
+    <!-- Suppress NU1701 warnings -->
+    <NoWarn>$(NoWarn);NU1701;NU1605</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VsAcp.Core\VsAcp.Core.csproj" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.ComponentModel.Composition" />
+    <Reference Include="System.Design" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="18.9.820">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.5" />
+    <!-- Serilog is pinned to 4.2.0 so it matches what Serilog.Sinks.File / Serilog.Extensions.Logging reference (no binding redirect needed). -->
+    <PackageReference Include="Serilog" Version="4.2.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3240.44" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.5" />
+    <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
+    <PackageReference Include="System.Text.Json" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\showdown.min.js" />
+    <EmbeddedResource Include="Assets\highlight.min.js" />
+    <EmbeddedResource Include="Assets\chat-template.html" />
+    <!-- Built by the BuildWebUi target below. -->
+    <EmbeddedResource Include="Web\dist\spa.js" LogicalName="VsAcp.Assets.spa.js" />
+    <EmbeddedResource Include="Web\dist\spa.css" LogicalName="VsAcp.Assets.spa.css" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="source.extension.vsixmanifest" SubType="Designer" />
+    <VSCTCompile Include="VsAcpPackage.vsct" ResourceName="Menus.ctmenu" />
+    <!-- Unified Settings manifest for Tools > Options > ACP Agent; registered by [ProvideSettingsManifest] on the package. -->
+    <Content Include="UnifiedSettings\registration.json">
+      <IncludeInVSIX>true</IncludeInVSIX>
+      <VSIXSubPath>UnifiedSettings</VSIXSubPath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- Referenced by source.extension.vsixmanifest's <Icon> element. -->
+    <Content Include="Resources\Icon.png">
+      <IncludeInVSIX>true</IncludeInVSIX>
+      <VSIXSubPath>Resources</VSIXSubPath>
+    </Content>
+  </ItemGroup>
+
+  <!--
+    Include all output DLLs in the VSIX except the BCL / Microsoft.Extensions assemblies that VS 18.10+
+    ships and redirects itself (devenv.exe.config redirects them to its own 10.0.0.x copies, so ours would
+    never load). Everything else is shipped because VSSDK's deny-list would otherwise drop it.
+  -->
+  <ItemGroup>
+    <VsProvidedAssembly Include="Microsoft.Bcl.AsyncInterfaces;System.Text.Json;System.Text.Encodings.Web;System.Diagnostics.DiagnosticSource;System.IO.Pipelines;System.Threading.Channels;Microsoft.Extensions.DependencyInjection.Abstractions;Microsoft.Extensions.DependencyInjection;Microsoft.Extensions.Options;Microsoft.Extensions.Logging.Abstractions;Microsoft.Extensions.Logging;Microsoft.Extensions.Primitives" />
+    <!-- Also drop them from the normal copy-local path (VSSDK's own deny-list only covers some). -->
+    <SuppressFromVsix Include="@(VsProvidedAssembly->'%(Identity).dll')" />
+  </ItemGroup>
+  <Target Name="IncludeAllDllsInVsix" BeforeTargets="GetVsixSourceItems">
+    <ItemGroup>
+      <_AllOutputDll Include="$(OutputPath)*.dll" />
+      <_VsProvidedDll Include="@(VsProvidedAssembly->'$(OutputPath)%(Identity).dll')" />
+      <VSIXSourceItem Include="@(_AllOutputDll)" Exclude="@(_VsProvidedDll)" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    Chat UI bundle: Web\ is a Preact + TypeScript project built with Vite into Web\dist\spa.js/.css,
+    which are embedded above and injected into the chat page at runtime. Requires Node.js (npm) on the
+    build machine; incremental on the Web\ sources, skipped for design-time builds.
+  -->
+  <ItemGroup>
+    <WebUiSource Include="Web\src\**\*;Web\package.json;Web\package-lock.json;Web\tsconfig.json;Web\vite.config.ts" />
+  </ItemGroup>
+  <Target Name="BuildWebUi"
+          BeforeTargets="CoreCompile"
+          Condition="'$(DesignTimeBuild)' != 'true'"
+          Inputs="@(WebUiSource)"
+          Outputs="$(WebDir)dist\spa.js;$(WebDir)dist\spa.css">
+    <Exec Command="npm --version" WorkingDirectory="$(WebDir)" StandardOutputImportance="low" IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="_NpmExitCode" />
+    </Exec>
+    <Error Condition="'$(_NpmExitCode)' != '0'" Text="Node.js with npm is required to build the chat UI (Web\). Install Node.js 20+ and make sure 'npm' is on PATH." />
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(WebDir)" Condition="!Exists('$(WebDir)node_modules')" />
+    <Exec Command="npm run build" WorkingDirectory="$(WebDir)" />
+  </Target>
+
+</Project>

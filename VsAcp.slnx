@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AcpProtocol/AcpProtocol.csproj" />
+    <Project Path="src/VsAcp.Core/VsAcp.Core.csproj" />
+    <Project Path="src/VsAcp/VsAcp.csproj">
+      <Deploy />
+    </Project>
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VsAcp.Core.Tests/VsAcp.Core.Tests.csproj" />
+    <Project Path="tests/VsAcp.FakeAgent/VsAcp.FakeAgent.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/AcpProtocolSchemaGenerator/AcpProtocolSchemaGenerator.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<style>
+/* Colours: every variable used below and by the app is defined in Web/src/theme.css, which is inlined
+   further down. (Do not write the replacement tokens in comments: they are replaced everywhere.) */
+* { box-sizing: border-box; }
+html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    height: 100%;
+}
+
+/* The whole chat UI is the Preact app (Web/): message list, banners, status bars and composer. */
+#spa-root {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb, rgba(128, 128, 128, 0.4));
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover, rgba(128, 128, 128, 0.7));
+}
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+</style>
+<script>{{SHOWDOWN_JS}}</script>
+<script>{{HIGHLIGHTJS_JS}}</script>
+<style>{{SPA_CSS}}</style>
+</head>
+<body>
+<div id="spa-root"></div>
+<script>{{SPA_JS}}</script>
+</body>
+</html>

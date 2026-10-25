@@ -1,0 +1,119 @@
+/*
+ * The page's whole colour system, in one place.
+ *
+ * The host (ChatSessionControl.ApplyThemeColors) pushes only a few ANCHORS from Visual Studio, as inline
+ * custom properties on <html>:
+ *     --bg-primary, --text-primary   the editor's Plain Text colours
+ *     --border, --accent             the theme's border and link colours
+ *     --button-bg, --button-fg       the theme's selection colours (accent buttons)
+ * together with two attributes on <html>, derived from the editor background:
+ *     data-scheme   = dark | light
+ *     data-contrast = high | normal  (a Windows high-contrast theme is active)
+ * Everything else below is derived from those, or chosen per scheme, so the page is consistent in every
+ * theme and the host never has to know about individual elements. The values here are the fallbacks used
+ * until the host speaks (and by the dev harness): a dark theme.
+ */
+
+:root {
+  --bg-primary: #1e1e1e;
+  --text-primary: #d4d4d4;
+  --border: #3f3f46;
+  --accent: #569cd6;
+}
+
+/* ---- surfaces and text, derived from the anchors ---- */
+:root {
+  --text-heading: var(--text-primary);
+  /* These three carry a contrast risk that depends on the theme, so theme.ts computes them against a floor
+     and sets them inline; the values here are what applies before the host speaks. */
+  --text-soft: var(--text-primary);
+  --text-muted: color-mix(in srgb, var(--text-primary) 62%, var(--bg-primary));
+  --link-text: var(--accent);
+  --bg-secondary: color-mix(in srgb, var(--text-primary) 6%, var(--bg-primary));
+  --bg-input: color-mix(in srgb, var(--text-primary) 13%, var(--bg-primary));
+  --user-bg: var(--bg-secondary);
+  --code-bg: color-mix(in srgb, var(--text-primary) 7%, var(--bg-primary));
+  --pre-bg: var(--bg-primary);
+}
+
+/* ---- status colours and the code palette: one set per scheme ---- */
+:root,
+:root[data-scheme='dark'] {
+  --success: #4ec9b0;
+  --error: #f44747;
+  --warning: #cca700;
+  --info: #808080;
+
+  --syn-fg: var(--text-primary);
+  --syn-keyword: #569cd6;
+  --syn-type: #4ec9b0;
+  --syn-number: #b8d7a3;
+  --syn-string: #d69d85;
+  --syn-regexp: #d16969;
+  --syn-comment: #57a64a;
+  --syn-doctag: #608b4e;
+  --syn-meta: #9b9b9b;
+  --syn-variable: #bd63c5;
+  --syn-attr: #9cdcfe;
+  --syn-section: #ffd700;
+  --syn-selector: #d7ba7d;
+  --syn-add-bg: #144212;
+  --syn-del-bg: #660000;
+}
+
+:root[data-scheme='light'] {
+  --success: #16825d;
+  --error: #cd3131;
+  --warning: #bf8803;
+  --info: #6b6b6b;
+
+  --syn-fg: var(--text-primary);
+  --syn-keyword: #0000ff;
+  --syn-type: #267f99;
+  --syn-number: #036b44;
+  --syn-string: #a31515;
+  --syn-regexp: #811f3f;
+  --syn-comment: #007a00;
+  --syn-doctag: #007a00;
+  --syn-meta: #6b6b6b;
+  --syn-variable: #001080;
+  --syn-attr: #c50000;
+  --syn-section: #795e26;
+  --syn-selector: #800000;
+  --syn-add-bg: #d4f4d4;
+  --syn-del-bg: #f9d0d0;
+}
+
+/* ---- a Windows high-contrast theme: nothing dim, no tints, outlines instead of fills ---- */
+/* (--text-muted, --text-soft and --border are set to the text colour by theme.ts in this mode) */
+:root[data-contrast='high'] {
+  --info: var(--text-primary);
+  --warning: var(--text-primary);
+  --bg-secondary: var(--bg-primary);
+  --bg-input: var(--bg-primary);
+  --user-bg: var(--bg-primary);
+  --code-bg: var(--bg-primary);
+}
+
+/* ---- highlight.js token colours (replaces the fixed vs2015 stylesheet) ---- */
+pre code.hljs { display: block; overflow-x: auto; padding: 1em; }
+code.hljs { padding: 3px 5px; }
+.hljs { color: var(--syn-fg); }
+.hljs-keyword, .hljs-literal, .hljs-name, .hljs-symbol { color: var(--syn-keyword); }
+.hljs-link { color: var(--syn-keyword); text-decoration: underline; }
+.hljs-built_in, .hljs-type { color: var(--syn-type); }
+.hljs-class, .hljs-number { color: var(--syn-number); }
+.hljs-meta .hljs-string, .hljs-string { color: var(--syn-string); }
+.hljs-regexp, .hljs-template-tag { color: var(--syn-regexp); }
+.hljs-formula, .hljs-function, .hljs-params, .hljs-subst, .hljs-title { color: var(--syn-fg); }
+.hljs-comment, .hljs-quote { color: var(--syn-comment); font-style: italic; }
+.hljs-doctag { color: var(--syn-doctag); }
+.hljs-meta, .hljs-meta .hljs-keyword, .hljs-tag { color: var(--syn-meta); }
+.hljs-template-variable, .hljs-variable { color: var(--syn-variable); }
+.hljs-attr, .hljs-attribute { color: var(--syn-attr); }
+.hljs-section { color: var(--syn-section); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
+.hljs-bullet, .hljs-selector-attr, .hljs-selector-class, .hljs-selector-id, .hljs-selector-pseudo, .hljs-selector-tag { color: var(--syn-selector); }
+.hljs-addition { background-color: var(--syn-add-bg); display: inline-block; width: 100%; }
+.hljs-deletion { background-color: var(--syn-del-bg); display: inline-block; width: 100%; }

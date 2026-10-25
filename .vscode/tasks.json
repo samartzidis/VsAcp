@@ -1,0 +1,116 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "install to VS2026",
+      "type": "process",
+      "command": "cmd.exe",
+      "args": [
+        "/c",
+        "start",
+        "VSIX Installer",
+        "C:\\Program Files\\Microsoft Visual Studio\\18\\${config:vsacp.vsEdition}\\Common7\\IDE\\VSIXInstaller.exe",
+        "${workspaceFolder}\\src\\VsAcp\\bin\\Debug\\net472\\VsAcp.vsix"
+      ],
+      "dependsOn": "build",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "uninstall from VS2026",
+      "type": "process",
+      "command": "cmd.exe",
+      "args": [
+        "/c",
+        "start",
+        "VSIX Installer",
+        "C:\\Program Files\\Microsoft Visual Studio\\18\\${config:vsacp.vsEdition}\\Common7\\IDE\\VSIXInstaller.exe",
+        "/uninstall:VsAcp.e5729d8a-9504-49b3-8d22-403148238d88"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "deploy to VS2026 Exp",
+      "type": "shell",
+      "command": "& '${workspaceFolder}\\.vscode\\Deploy-VsixExp.ps1'",
+      "options": {
+        "shell": {
+          "executable": "pwsh.exe",
+          "args": ["-NoProfile", "-NonInteractive", "-Command"]
+        }
+      },
+      "problemMatcher": "$msCompile",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "launch VS2026 Exp",
+      "type": "shell",
+      "command": "Start-Process -FilePath 'C:\\Program Files\\Microsoft Visual Studio\\18\\${config:vsacp.vsEdition}\\Common7\\IDE\\devenv.exe' -ArgumentList '/rootsuffix','Exp','${workspaceFolder}\\VsAcp.slnx'",
+      "options": {
+        "shell": {
+          "executable": "powershell.exe",
+          "args": ["-NoProfile", "-Command"]
+        }
+      },
+      "dependsOn": "deploy to VS2026 Exp",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "mirror",
+      "type": "shell",
+      "command": "& '${workspaceFolder}\\.vscode\\Mirror.ps1'",
+      "options": {
+        "shell": {
+          "executable": "pwsh.exe",
+          "args": ["-NoProfile", "-NonInteractive", "-Command"]
+        }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "build",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}\\VsAcp.slnx", "--configuration", "Debug"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$msCompile",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "build (release)",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}\\VsAcp.slnx", "--configuration", "Release"],
+      "group": "build",
+      "problemMatcher": "$msCompile",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+  <Include href="KnownImageIds.vsct" />
+
+  <Commands package="guidVsAcpPackage">
+    <Buttons>
+      <Button guid="guidVsAcpCmdSet" id="cmdidOpenChat" priority="0x0100" type="Button">
+        <Parent guid="guidSHLMainMenu" id="IDG_VS_WNDO_OTRWNDWS1" />
+        <Icon guid="ImageCatalogGuid" id="WindowsForm" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>ACP Agent</ButtonText>
+        </Strings>
+      </Button>
+    </Buttons>
+  </Commands>
+
+  <KeyBindings>
+    <!-- Ctrl+Shift+/ -->
+    <KeyBinding guid="guidVsAcpCmdSet" id="cmdidOpenChat" editor="guidVSStd97" key1="VK_OEM_2" mod1="Control Shift" />
+  </KeyBindings>
+
+  <Symbols>
+    <!-- Must match the [Guid] on VsAcpPackage. -->
+    <GuidSymbol name="guidVsAcpPackage" value="{c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f}" />
+
+    <!-- Must match VsAcpPackage.CommandSet / OpenChatCommandId. -->
+    <GuidSymbol name="guidVsAcpCmdSet" value="{6f1d2c8a-3b4e-4a7f-9c21-5d8e0b7a4f13}">
+      <IDSymbol name="cmdidOpenChat" value="0x0100" />
+    </GuidSymbol>
+  </Symbols>
+</CommandTable>

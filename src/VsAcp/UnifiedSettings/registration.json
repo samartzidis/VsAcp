@@ -1,0 +1,42 @@
+{
+  "properties": {
+    "acpAgent.preset": {
+      "type": "string",
+      "title": "Preset",
+      "description": "Cursor Agent runs 'agent acp'. Claude Code runs 'npx @agentclientprotocol/claude-agent-acp --yes'. Choose Custom to enter the command and arguments yourself.",
+      "default": "cursor",
+      "enum": [ "cursor", "claudeCode", "custom" ],
+      "enumItemLabels": [ "Cursor Agent", "Claude Code", "Custom" ],
+      "order": 0
+    },
+    "acpAgent.agentCommand": {
+      "type": "string",
+      "title": "Agent command",
+      "description": "Executable to launch as the ACP agent process.",
+      "default": "agent",
+      "visibleWhen": "${config:acpAgent.preset} == 'custom'",
+      "order": 1
+    },
+    "acpAgent.agentArguments": {
+      "type": "string",
+      "title": "Agent arguments",
+      "description": "Command-line arguments passed to the agent process.",
+      "default": "acp",
+      "visibleWhen": "${config:acpAgent.preset} == 'custom'",
+      "order": 2
+    },
+    "acpAgent.enableChatDevTools": {
+      "type": "boolean",
+      "title": "Enable chat DevTools",
+      "description": "Right-clicking the chat panel shows 'Inspect' to open the WebView2 developer tools (for chat tabs opened after the change). Disable in production.",
+      "default": false,
+      "order": 3
+    }
+  },
+  "categories": {
+    "acpAgent": {
+      "title": "ACP Agent",
+      "description": "Which ACP agent process Visual Studio launches for chat sessions. Changes apply to new chat tabs."
+    }
+  }
+}

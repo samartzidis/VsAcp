@@ -1,0 +1,8 @@
+<UserControl x:Class="VsAcp.Controls.ChatWebView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf">
+    <!-- Everything the user sees (messages, banners, status bars, composer) is the page in this WebView2. -->
+    <wv2:WebView2 x:Name="WebView"
+                  DefaultBackgroundColor="Transparent"/>
+</UserControl>
