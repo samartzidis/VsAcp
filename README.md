@@ -6,31 +6,37 @@
 
 Integrate Claude Code, Cursor and other agents directly into the Visual Studio IDE.
 
-A Visual Studio extension that hosts AI coding agents - Claude Code, Cursor, or any other [Agent Client Protocol (ACP)](https://agentclientprotocol.com/) compliant agent — in a native chat tool window, integrating it to Visual Studio's files, editors, terminals, and permission system.
+A Visual Studio extension that hosts AI coding agents - Claude Code, Cursor, or any other [Agent Client Protocol (ACP)](https://agentclientprotocol.com/) compliant agent - in a native chat tool window, integrating it to Visual Studio's files, editors, terminals, and permission system.
+
+<p align="center">
+  <a href="docs/screenshot.png">
+    <img src="docs/screenshot.png" alt="VsAcp in Visual Studio: agent edits shown as inline Keep/Undo diffs in the editor, with the chat window and pending-files list on the right" width="900">
+  </a>
+</p>
 
 ## Capabilities
 
-- **Chat tool window** — multiple tabs, each a persistent session restored across VS restarts
-- **Inline file diffs** — agent edits are written straight to disk and shown as a Keep/Undo overlay in the editor, with a pending-changes list grouping the agent's own edits apart from shell/build/user changes
-- **Revert to here** — roll back a conversation and the workspace files it changed, via local shadow-git checkpoints; no project git repo required or touched
-- **Permission prompts** — per-tab auto-approve toggle, plus mode/model selection and session config options the agent advertises
-- **Elicitation** — renders an agent's structured form or URL request as an in-chat prompt
-- **Terminal support** — runs and streams output for commands the agent executes
-- **Extra folders** — share additional project folders with the agent beyond the solution folder
-- **Attachments** — file drag-drop, image paste, and code-reference paste from the editor as chips
-- **Slash commands** — agent-advertised commands as an inline picker
+- **Chat tool window** - multiple tabs, each a persistent session restored across VS restarts
+- **Inline file diffs** - agent edits are written straight to disk and shown as a Keep/Undo overlay in the editor, with a pending-changes list grouping the agent's own edits apart from shell/build/user changes
+- **Revert to here** - roll back a conversation and the workspace files it changed, via local shadow-git checkpoints; no project git repo required or touched
+- **Permission prompts** - per-tab auto-approve toggle, plus mode/model selection and session config options the agent advertises
+- **Elicitation** - renders an agent's structured form or URL request as an in-chat prompt
+- **Terminal support** - runs and streams output for commands the agent executes
+- **Extra folders** - share additional project folders with the agent beyond the solution folder
+- **Attachments** - file drag-drop, image paste, and code-reference paste from the editor as chips
+- **Slash commands** - agent-advertised commands as an inline picker
 
 ## Limitations
 
 VsAcp tracks the **stable ACP v1 protocol**, not the unstable v2 draft:
 
-- **Subagents** — no UI for agent-delegated subagent runs; subagents aren't part of the stable v1 schema
-- **Message-level agent rollback** — the stable protocol has no server-side rewind, so "Revert to here" works around it: it restores local files from a shadow-git checkpoint and re-primes the agent with the prior conversation as context, rather than truly rewinding the agent's own session state
-- **Session fork / rewind** (`session/fork`, `session/rewind`, `session/edit_prompt`) — unstable v2 RFDs, not implemented
+- **Subagents** - no UI for agent-delegated subagent runs; subagents aren't part of the stable v1 schema
+- **Message-level agent rollback** - the stable protocol has no server-side rewind, so "Revert to here" works around it: it restores local files from a shadow-git checkpoint and re-primes the agent with the prior conversation as context, rather than truly rewinding the agent's own session state
+- **Session fork / rewind** (`session/fork`, `session/rewind`, `session/edit_prompt`) - unstable v2 RFDs, not implemented
 
 Separately, a couple of methods that *are* in the stable v1 schema aren't wired up yet:
 
-- **Agent-driven authentication / `logout`** — authenticate and sign out via the agent CLI directly (see the setup sections above) rather than through VsAcp
+- **Agent-driven authentication / `logout`** - authenticate and sign out via the agent CLI directly (see the setup sections above) rather than through VsAcp
 
 ## Requirements
 
@@ -42,14 +48,14 @@ Separately, a couple of methods that *are* in the stable v1 schema aren't wired 
 
 The built-in **Claude Code** preset (**Tools \> Options \> ACP Agent**) runs `npx @agentclientprotocol/claude-agent-acp --yes`, so it needs:
 
-- **Node.js / npm** on `PATH` — `npx` fetches and runs the bridge package on demand, no separate install required
-- **The [Claude Code CLI](https://code.claude.com/docs/en/overview)** installed and signed in (`claude` on `PATH`, logged in via a Claude.ai subscription or an `ANTHROPIC_API_KEY`) — the bridge drives this CLI under the hood, so it needs its own working session
+- **Node.js / npm** on `PATH` - `npx` fetches and runs the bridge package on demand, no separate install required
+- **The [Claude Code CLI](https://code.claude.com/docs/en/overview)** installed and signed in (`claude` on `PATH`, logged in via a Claude.ai subscription or an `ANTHROPIC_API_KEY`) - the bridge drives this CLI under the hood, so it needs its own working session
 
 Run `claude` once from a terminal to install dependencies and complete login before using the preset in VsAcp.
 
 ### Cursor agent setup
 
-The built-in **Cursor** preset (**Tools \> Options \> ACP Agent**) runs `agent acp`, so it needs the [Cursor CLI](https://docs.cursor.com/en/cli/installation) installed (`agent` on `PATH`) and signed in — browser login is the default, or set `CURSOR_API_KEY` for unattended use.
+The built-in **Cursor** preset (**Tools \> Options \> ACP Agent**) runs `agent acp`, so it needs the [Cursor CLI](https://docs.cursor.com/en/cli/installation) installed (`agent` on `PATH`) and signed in - browser login is the default, or set `CURSOR_API_KEY` for unattended use.
 
 Run `agent login` once from a terminal to complete setup before using the preset in VsAcp.
 
