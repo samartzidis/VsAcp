@@ -1,15 +1,12 @@
 name: Build, Test & Release
 
-# This repo (VsAcp-private) is mirrored verbatim to the public VsAcp repo
-# (see .vscode/Mirror.ps1), so this file lives there too. Two ways in:
-#  - "Run workflow": build and test, optionally release by hand - works in
-#    either repo.
+# Two ways in, in whichever repo this file lives (it is mirrored verbatim, see
+# .vscode/Mirror.ps1, so the repo name is never checked):
+#  - "Run workflow": build and test, optionally release by hand.
 #  - A push to main: build, test and, if the Identity Version in
 #    source.extension.vsixmanifest has no release yet (no v<version> tag),
 #    release it automatically, with the version number as the only release
-#    notes. Automatic only in the public repo (PUBLIC_REPO below) - a push to
-#    VsAcp-private's main does nothing, since every push there is mirrored
-#    on to the public repo's main anyway, which then runs this for real.
+#    notes.
 
 on:
   push:
@@ -65,14 +62,10 @@ jobs:
             echo "Could not read the Identity Version from source.extension.vsixmanifest." >&2
             exit 1
           fi
-          PUBLIC_REPO="samartzidis/VsAcp"
           BUILD=true
           RELEASE=false
           if [ "$EVENT" = "workflow_dispatch" ]; then
             RELEASE="$RELEASE_INPUT"
-          elif [ "$EVENT" = "push" ] && [ "$REPO" != "$PUBLIC_REPO" ]; then
-            echo "Push trigger only runs automatically in $PUBLIC_REPO; skipping on $REPO (use \"Run workflow\" to build here by hand)."
-            BUILD=false
           elif gh api "repos/$REPO/git/refs/tags/v$VERSION" >/dev/null 2>&1; then
             echo "v$VERSION is already released - nothing to do."
             BUILD=false
