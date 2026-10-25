@@ -104,6 +104,7 @@ public class TurnEndOrderingTests
         public Task<string> GenerateTitleAsync(string userMessage, CancellationToken cancellationToken = default) => Task.FromResult("title");
         public event Action<string>? TitleChanged { add { } remove { } }
         public void ClearHistory() { }
+        public void ResetSession() { }
         public Task InitializeWithContextAsync(IReadOnlyList<PersistedMessage> messages, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public void Cancel() { }
         public decimal? GetSessionCost() => null;

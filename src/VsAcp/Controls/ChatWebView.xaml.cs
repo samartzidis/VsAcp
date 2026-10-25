@@ -23,10 +23,11 @@ public partial class ChatWebView : UserControl
     public static event Action<string>? FileOpenRequested;
 
     /// <summary>
-    /// Raised when the user clicks "Revert to here" on a user message bubble.
-    /// The string argument is the checkpointId stored on the message.
+    /// Raised when the user clicks "Revert to here" on a user message bubble of this page.
+    /// The string argument is the checkpointId stored on the message. Per instance: a static event made
+    /// every open tab revert (and wipe its own history) on any tab's click.
     /// </summary>
-    public static event Action<string>? RevertRequested;
+    public event Action<string>? RevertRequested;
 
     /// <summary>
     /// Raised for page messages other than the chat-message ones above (<c>openFile</c>, <c>revert</c>):

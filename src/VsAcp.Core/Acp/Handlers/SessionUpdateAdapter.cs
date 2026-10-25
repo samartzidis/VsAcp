@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -127,8 +128,22 @@ public sealed class SessionUpdateAdapter
         _messageAgentId = null;
     }
 
+    readonly ConcurrentDictionary<string, bool> _closedSessions = new();
+
+    /// <summary>
+    /// Drops every later update of <paramref name="sessionId"/>: a revert closed it while the agent process lives
+    /// on, and a late title or usage update from it must not land on the chat's new session.
+    /// </summary>
+    public void IgnoreSession(string sessionId) => _closedSessions[sessionId] = true;
+
     public ValueTask HandleAsync(SessionNotification notification, CancellationToken cancellationToken)
     {
+        if (_closedSessions.ContainsKey(notification.SessionId))
+        {
+            _logger.LogDebug("Dropping {UpdateType} of closed session {SessionId}", notification.Update?.GetType().Name, notification.SessionId);
+            return default;
+        }
+
         var update = notification.Update;
 
         // Usage is session state, not turn content: the final usage_update of a replayed history is

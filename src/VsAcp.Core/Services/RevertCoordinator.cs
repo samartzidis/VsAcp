@@ -89,6 +89,14 @@ public sealed class RevertCoordinator
             ? await store.GetMessagesAsync(sid)
             : [];
 
+        // A Revert button belongs to a message of its own chat, so an unknown checkpoint is a misrouted request
+        // (another tab's click). Going ahead would restore every file and truncate this chat to nothing.
+        if (store is not null && sid is not null && allMessages.All(m => m.CheckpointId != checkpointId))
+        {
+            Serilog.Log.Warning("[Revert] Checkpoint {CheckpointId} is no message of chat {SessionId}; nothing reverted", checkpointId, sid);
+            throw new InvalidOperationException($"Checkpoint {checkpointId} is not a message of this chat; nothing was reverted.");
+        }
+
         // 1. Restore workspace files: the agent's, or everything.
         var onlyPaths = includeOther ? null : AgentChangedFiles(allMessages, checkpointId);
         Serilog.Log.Information("[Revert] Restoring {Scope}", onlyPaths is null
@@ -134,10 +142,10 @@ public sealed class RevertCoordinator
         // tab of the workspace, so "everything newer than the target" would delete other tabs' restore points.
         await _checkpointService.DeleteCheckpointsAsync(discardedCheckpointIds);
 
-        // 5. Kill old agent session and erase the persisted ACP session ID so that on the next VS
-        // load, EnablePersistence gets null and never calls session/load with the old ID (which
-        // would replay the full pre-revert history from Cursor's backend).
-        _chatService?.ClearHistory();
+        // 5. Drop the old agent session (the agent process stays for the next one) and erase the persisted
+        // ACP session ID so that on the next VS load, EnablePersistence gets null and never calls
+        // session/load with the old ID (which would replay the full pre-revert history from Cursor's backend).
+        _chatService?.ResetSession();
         if (store is not null && sid is not null)
         {
             var index = await store.GetSessionIndexAsync();

@@ -301,6 +301,11 @@ public sealed class ClientSideConnection : IDisposable, IAcpAgent
         return RequestAsync<DeleteSessionRequest, DeleteSessionResponse>(AgentMethods.SessionDelete, request, cancellationToken);
     }
 
+    public ValueTask<CloseSessionResponse> CloseSessionAsync(CloseSessionRequest request, CancellationToken cancellationToken = default)
+    {
+        return RequestAsync<CloseSessionRequest, CloseSessionResponse>(AgentMethods.SessionClose, request, cancellationToken);
+    }
+
     public async ValueTask<JsonElement> ExtMethodAsync(string method, JsonElement request, CancellationToken cancellationToken = default)
     {
         var response = await endpoint.SendRequestAsync(new JsonRpcRequest

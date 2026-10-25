@@ -7,31 +7,30 @@ namespace VsAcp.Core.Tests;
 /// <summary>Checkpoint + "Revert to here" end to end: agent edits files, user reverts, conversation is rebuilt.</summary>
 public class RevertFlowTests
 {
-    private static object Scenario() => new
+    private static object Scenario() => new { turns = Turns() };
+
+    private static object[] Turns() => new object[]
     {
-        turns = new object[]
+        new
         {
-            new
+            when = "one",
+            steps = new object[]
             {
-                when = "one",
-                steps = new object[]
-                {
-                    new { write = new { path = "a.txt", content = "one" } },
-                    new { say = "wrote one" }
-                }
-            },
-            new
+                new { write = new { path = "a.txt", content = "one" } },
+                new { say = "wrote one" }
+            }
+        },
+        new
+        {
+            when = "two",
+            steps = new object[]
             {
-                when = "two",
-                steps = new object[]
-                {
-                    new { write = new { path = "a.txt", content = "two" } },
-                    new { write = new { path = "new.txt", content = "created by two" } },
-                    new { say = "wrote two" }
-                }
-            },
-            new { steps = new object[] { new { say = "ok" } } }
-        }
+                new { write = new { path = "a.txt", content = "two" } },
+                new { write = new { path = "new.txt", content = "created by two" } },
+                new { say = "wrote two" }
+            }
+        },
+        new { steps = new object[] { new { say = "ok" } } }
     };
 
     [Fact]
@@ -210,6 +209,154 @@ public class RevertFlowTests
 
         // The revert drops the agent's session; the next send starts a fresh one.
         Assert.Equal(2, h.Received("session/new").Count);
+    }
+
+    [Fact]
+    public async Task Stopping_the_first_send_while_the_agent_starts_keeps_the_prior_conversation()
+    {
+        // 2026-10-25 in VS: after a revert the first message waited ~14 s for a cold agent start, Stop was pressed,
+        // and the next message reached the agent without the conversation ("it reset the session"). The wait is
+        // now only session/new on the running agent, but a Stop during it must still keep the context.
+        using var h = await ChatHarness.CreateAsync(new
+        {
+            answerDelayMs = new Dictionary<string, int> { ["session/new"] = 1500 },
+            turns = Turns()
+        });
+        await h.SendAsync("one");
+        await h.SendAsync("two");
+        await h.RevertToUserMessageAsync(1);
+
+        using (var turn = new CancellationTokenSource())
+        {
+            var sending = h.SendAsync("three", turn.Token);
+            await h.WaitUntilAsync(() => h.Received("session/new").Count == 2, "the new agent to receive session/new");
+            h.Stop(turn);
+            Assert.Equal(TurnResult.Cancelled, await sending);
+        }
+        await h.SendAsync("four");
+
+        var prompts = h.PromptTexts();
+        Assert.Equal(3, prompts.Count);
+        Assert.Contains("<prior_conversation_context>", prompts[2]);
+        Assert.Contains("wrote one", prompts[2]);
+        Assert.EndsWith("four", prompts[2]);
+    }
+
+    [Fact]
+    public async Task A_revert_to_a_checkpoint_this_chat_does_not_own_changes_nothing()
+    {
+        // 2026-10-25 in VS: a Revert click in one tab also ran in every other open tab. There the checkpoint was
+        // no message of the chat, and the revert restored every file and deleted the chat's whole history.
+        using var h = await ChatHarness.CreateAsync(Scenario());
+        await h.SendAsync("one");
+        await h.SendAsync("two");
+        var otherChats = await h.Checkpoints.CreateCheckpointAsync(); // as another tab's message would own it
+        h.WriteFile("a.txt", "edited after that checkpoint");
+        var persisted = await h.PersistedAsync();
+        var shown = h.Messages.Count;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => h.RevertToCheckpointAsync(otherChats!));
+
+        Assert.Equal("edited after that checkpoint", h.ReadFile("a.txt"));
+        Assert.Equal(persisted.Count, (await h.PersistedAsync()).Count);
+        Assert.Equal(shown, h.Messages.Count);
+        await h.SendAsync("three");
+        Assert.Single(h.Received("session/new"));
+        Assert.DoesNotContain("<prior_conversation_context>", h.PromptTexts().Last());
+    }
+
+    // ---- the agent process survives a revert ----
+
+    private static object SupportsClose() => new { loadSession = false, sessionCapabilities = new { close = new { } } };
+
+    [Fact]
+    public async Task After_a_revert_the_next_send_opens_a_new_session_on_the_same_agent()
+    {
+        // A revert used to kill the agent, so the next message paid a cold start (6-15 s with npx).
+        using var h = await ChatHarness.CreateAsync(Scenario());
+        await h.SendAsync("one");
+        await h.SendAsync("two");
+        await h.RevertToUserMessageAsync(1);
+
+        await h.SendAsync("three");
+
+        Assert.Single(h.AgentProcessIds());
+        Assert.Single(h.Received("initialize"));
+        Assert.Equal(2, h.Received("session/new").Count);
+        Assert.Equal("fake-session-2", (string?)h.Received("session/prompt").Last()["sessionId"]);
+        Assert.Contains("wrote one", h.PromptTexts().Last());
+        Assert.EndsWith("three", h.PromptTexts().Last());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_revert_closes_the_old_session_when_the_agent_supports_it(bool supportsClose)
+    {
+        using var h = await ChatHarness.CreateAsync(new
+        {
+            agentCapabilities = supportsClose ? SupportsClose() : new { loadSession = false },
+            turns = Turns()
+        });
+        await h.SendAsync("one");
+        await h.RevertToUserMessageAsync(0);
+
+        await h.SendAsync("again");
+
+        if (supportsClose)
+            Assert.Equal("fake-session-1", (string?)Assert.Single(h.Received("session/close"))["sessionId"]);
+        else
+            Assert.Empty(h.Received("session/close"));
+    }
+
+    [Fact]
+    public async Task Late_updates_from_the_closed_session_do_not_reach_the_chat()
+    {
+        using var h = await ChatHarness.CreateAsync(new
+        {
+            agentCapabilities = SupportsClose(),
+            updatesOnClose = new object[]
+            {
+                new { sessionUpdate = "usage_update", used = 999, size = 1000 },
+                new { sessionUpdate = "session_info_update", title = "STALE TITLE" }
+            },
+            turns = Turns()
+        });
+        await h.SendAsync("one");
+        await h.SendAsync("two");
+        await h.RevertToUserMessageAsync(1);
+        await h.WaitUntilAsync(() => h.AgentLog().Any(e => (string?)e["dir"] == "out" && e.ToJsonString().Contains("STALE TITLE")),
+            "the agent to send its late updates");
+
+        await h.SendAsync("three"); // everything the agent sent before this turn's answers has been handled
+
+        Assert.Null(h.Service.Usage);
+        Assert.NotEqual("STALE TITLE", (await h.IndexEntryAsync()).Title);
+    }
+
+    [Fact]
+    public async Task A_running_agent_that_does_not_open_a_new_session_in_time_is_restarted()
+    {
+        // The process may look alive while the agent is wedged (a launcher holding the pipes); the old kill on
+        // revert recovered that, so the cheap path must give up and restart.
+        using var h = await ChatHarness.CreateAsync(new
+            {
+                answerDelayMs = new Dictionary<string, int> { ["session/new"] = 1500 },
+                turns = Turns()
+            },
+            o => o.NewSessionOnRunningAgentTimeout = TimeSpan.FromMilliseconds(300));
+        await h.SendAsync("one");
+        await h.SendAsync("two");
+        await h.RevertToUserMessageAsync(1);
+
+        var result = await h.SendWithinAsync("three");
+
+        Assert.Equal(TurnResult.Completed, result);
+        var pids = h.AgentProcessIds();
+        Assert.Equal(2, pids.Count);
+        Assert.False(ChatHarness.IsRunning(pids[0]));
+        Assert.Contains("wrote one", h.PromptTexts().Last());
+        Assert.EndsWith("three", h.PromptTexts().Last());
     }
 
     [Fact]

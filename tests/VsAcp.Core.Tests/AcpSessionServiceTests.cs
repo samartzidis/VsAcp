@@ -480,6 +480,31 @@ public class AcpSessionServiceTests
     }
 
     [Fact]
+    public async Task A_send_stopped_before_its_prompt_went_out_leaves_the_context_for_the_next_one()
+    {
+        using var h = await ChatHarness.CreateAsync(ThreeTurns());
+        await h.SendAsync("one");
+        await h.SendAsync("two");
+        await h.RevertToUserMessageAsync(1);
+        await h.Service.LoadSessionAsync(); // the new session is open; the context still waits for a message
+
+        using var stopped = new CancellationTokenSource();
+        stopped.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in h.Service.SendMessageAsync("lost", cancellationToken: stopped.Token))
+            {
+            }
+        });
+        await h.SendAsync("three");
+
+        var prompts = h.PromptTexts();
+        Assert.DoesNotContain(prompts, p => p.Contains("lost"));
+        Assert.Contains("[Assistant]: A1", prompts.Last());
+        Assert.EndsWith("three", prompts.Last());
+    }
+
+    [Fact]
     public async Task A_second_revert_replaces_the_context_of_the_first()
     {
         using var h = await ChatHarness.CreateAsync(ThreeTurns());

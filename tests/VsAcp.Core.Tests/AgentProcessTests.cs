@@ -86,6 +86,78 @@ public class AgentProcessTests
         Assert.Single(h.AgentProcessIds());
     }
 
+    // ---- Stop while the agent is still starting ----
+
+    private static async Task<(TurnResult Result, TimeSpan StopToEnd)> StopWhileStartingAsync(
+        ChatHarness h, string prompt, string method, int count = 1)
+    {
+        using var turn = new CancellationTokenSource();
+        var sending = h.SendAsync(prompt, turn.Token);
+        await h.WaitUntilAsync(() => h.Received(method).Count == count, $"the agent to receive {method}");
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        h.Stop(turn);
+        var result = await sending;
+        return (result, clock.Elapsed);
+    }
+
+    [Fact]
+    public async Task Stop_while_the_agent_is_still_starting_ends_the_turn_at_once()
+    {
+        // A cold `npx` start can take 10-15 s before session/new answers; Stop has no agent session to cancel yet,
+        // so it must give up on the start-up instead of waiting it out.
+        using var h = await ChatHarness.CreateAsync(new { answerDelayMs = new Dictionary<string, int> { ["session/new"] = 5000 } });
+
+        var (result, stopToEnd) = await StopWhileStartingAsync(h, "hello", "session/new");
+
+        Assert.Equal(TurnResult.Cancelled, result);
+        Assert.True(stopToEnd < TimeSpan.FromSeconds(2), $"The turn ended {stopToEnd} after Stop.");
+        Assert.Empty(h.Received("session/prompt"));
+    }
+
+    [Fact]
+    public async Task The_next_message_after_a_stopped_start_up_works_and_leaves_no_stray_agent()
+    {
+        using var h = await ChatHarness.CreateAsync(new { answerDelayMs = new Dictionary<string, int> { ["session/new"] = 1500 } });
+        await StopWhileStartingAsync(h, "hello", "session/new");
+
+        var result = await h.SendWithinAsync("again");
+
+        Assert.Equal(TurnResult.Completed, result);
+        Assert.Equal("again", Assert.Single(h.PromptTexts()));
+        var pids = h.AgentProcessIds();
+        Assert.All(pids.Take(pids.Count - 1), pid => Assert.False(ChatHarness.IsRunning(pid)));
+    }
+
+    [Fact]
+    public async Task Stop_while_the_agent_reloads_the_session_is_not_a_failed_restore()
+    {
+        // After a crash the next message reloads the session in a new agent. Stopping that load must not be
+        // mistaken for "the session is gone": no warning, and the next message loads the same session again.
+        using var h = await ChatHarness.CreateAsync(new
+        {
+            agentCapabilities = new { loadSession = true },
+            answerDelayMs = new Dictionary<string, int> { ["session/load"] = 5000 },
+            turns = new object[]
+            {
+                new { when = "boom", steps = new object[] { new { exit = 3 } } },
+                new { steps = new object[] { new { say = "back again" } } }
+            }
+        });
+        await h.SendWithinAsync("first");
+        await h.SendWithinAsync("boom");
+
+        var (stopped, stopToEnd) = await StopWhileStartingAsync(h, "hello", "session/load");
+        var result = await h.SendWithinAsync("again");
+
+        Assert.Equal(TurnResult.Cancelled, stopped);
+        Assert.True(stopToEnd < TimeSpan.FromSeconds(2), $"The turn ended {stopToEnd} after Stop.");
+        Assert.Equal(TurnResult.Completed, result);
+        Assert.False(HasText(h, "could not be restored"), h.Log.ToString());
+        Assert.Equal(2, h.Received("session/load").Count);
+        Assert.All(h.Received("session/load"), load => Assert.Equal("fake-session-1", (string?)load["sessionId"]));
+        Assert.Single(h.Received("session/new"));
+    }
+
     // ---- the agent dies ----
 
     [Fact]

@@ -21,6 +21,9 @@ namespace VsAcp.FakeAgent;
 //     "replayOnLoad": [ <sessionUpdate>, ... ],                // sent during session/load (history replay)
 //     "failLoad": true,                                        // session/load answers with an error (session gone)
 //     "configOptionsOnSet": [ ... ],                           // result of session/set_config_option (default: [])
+//     "updatesOnClose": [ <sessionUpdate>, ... ],              // sent for the closed session during session/close
+//     "answerDelayMs": { "session/new": 3000 },                // wait this long before answering that request
+//                                                              // (a slow cold start, e.g. npx fetching the agent)
 //     "turns": [ { "when": "text", "steps": [ <step>, ... ] }, ... ]
 //   }
 // A prompt runs the first turn whose "when" is contained in the user's text (a turn without "when" is the
@@ -80,6 +83,7 @@ internal sealed class Agent
     private readonly object _writeLock = new();
     private readonly object _logLock = new();
     private readonly ConcurrentDictionary<string, string> _sessionCwd = new();
+    private readonly ConcurrentDictionary<string, bool> _closedSessions = new();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonObject>> _pendingClientRequests = new();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<bool>> _cancels = new();
     private volatile bool _hung;
@@ -155,6 +159,9 @@ internal sealed class Agent
 
         try
         {
+            if ((int?)(_scenario["answerDelayMs"] as JsonObject)?[method] is { } delayMs)
+                await Task.Delay(delayMs).ConfigureAwait(false);
+
             JsonNode result = method switch
             {
                 "initialize" => Initialize(),
@@ -165,7 +172,8 @@ internal sealed class Agent
                 {
                     ["configOptions"] = (_scenario["configOptionsOnSet"] as JsonArray)?.DeepClone() ?? new JsonArray()
                 },
-                "session/set_mode" or "session/delete" or "session/close" => new JsonObject(),
+                "session/close" => CloseSession(parameters),
+                "session/set_mode" or "session/delete" => new JsonObject(),
                 _ => throw new RpcError(-32601, "Method not found: " + method)
             };
 
@@ -212,6 +220,24 @@ internal sealed class Agent
         return result;
     }
 
+    private JsonObject CloseSession(JsonObject parameters)
+    {
+        // Real agents can still emit updates for a session as it closes (a late title, a usage report).
+        var sessionId = (string?)parameters["sessionId"] ?? "";
+        if (_scenario["updatesOnClose"] is JsonArray updates)
+        {
+            foreach (var update in updates)
+            {
+                if (update is not null)
+                    SendUpdate(sessionId, update.DeepClone());
+            }
+        }
+
+        _sessionCwd.TryRemove(sessionId, out _);
+        _closedSessions[sessionId] = true;
+        return new JsonObject();
+    }
+
     private async Task<JsonObject> LoadSessionAsync(JsonObject parameters)
     {
         if ((bool?)_scenario["failLoad"] == true)
@@ -237,6 +263,8 @@ internal sealed class Agent
     private async Task<JsonObject> PromptAsync(JsonObject parameters)
     {
         var sessionId = (string?)parameters["sessionId"] ?? "";
+        if (_closedSessions.ContainsKey(sessionId))
+            throw new RpcError(-32002, "Session closed: " + sessionId);
         var cwd = _sessionCwd.TryGetValue(sessionId, out var known) ? known : Environment.CurrentDirectory;
 
         var text = PromptText(parameters["prompt"] as JsonArray);

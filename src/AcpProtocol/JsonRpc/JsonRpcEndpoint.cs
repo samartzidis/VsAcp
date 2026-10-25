@@ -245,6 +245,14 @@ internal sealed class JsonRpcEndpoint
         var tcs = new TaskCompletionSource<JsonRpcResponse>();
         pendingRequests.TryAdd(request.Id, tcs);
 
+        // A cancelled request stops waiting; an answer that still arrives is logged as an unknown id.
+        var id = request.Id;
+        using var registration = cancellationToken.Register(() =>
+        {
+            if (pendingRequests.TryRemove(id, out var pending))
+                pending.TrySetCanceled(cancellationToken);
+        });
+
         await writeFunc(json, cancellationToken).ConfigureAwait(false);
 
         return await tcs.Task;

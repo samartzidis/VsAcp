@@ -208,6 +208,10 @@ public sealed class ChatHarness : IDisposable
     public Task<PersistedMessage?> RevertToUserMessageAsync(int userMessageIndex, bool includeOther = true)
         => _controller.RevertAsync(CheckpointOfUserMessage(userMessageIndex), includeOther);
 
+    /// <summary>"Revert to here" with a raw checkpoint id, e.g. one this chat does not own (a misrouted click).</summary>
+    public Task<PersistedMessage?> RevertToCheckpointAsync(string checkpointId, bool includeOther = false)
+        => _controller.RevertAsync(checkpointId, includeOther);
+
     /// <summary>What the revert confirmation would list for the <paramref name="userMessageIndex"/>-th user message.</summary>
     public Task<RevertPreview> PreviewRevertAsync(int userMessageIndex)
         => _controller.PreviewRevertAsync(CheckpointOfUserMessage(userMessageIndex))!;

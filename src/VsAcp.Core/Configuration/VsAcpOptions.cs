@@ -37,4 +37,10 @@ public class VsAcpOptions
     /// its process tree is killed (the next message then starts a fresh agent).
     /// </summary>
     public TimeSpan CancelGracePeriod { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// How long a still-running agent may take to open a new session after a revert before it is treated as
+    /// wedged and restarted (a full start is only paid when the cheap path fails).
+    /// </summary>
+    public TimeSpan NewSessionOnRunningAgentTimeout { get; set; } = TimeSpan.FromSeconds(15);
 }

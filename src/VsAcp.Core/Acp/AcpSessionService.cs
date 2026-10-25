@@ -21,6 +21,8 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
     readonly ILogger<AcpSessionService> _logger;
 
     ClientSideConnection? _connection;
+    // _connection finished its initialize handshake, so a new session can be opened on it without a restart.
+    bool _connectionReady;
     string? _sessionId;
     readonly SemaphoreSlim _initLock = new(1, 1);
     SessionConfigOption[] _configOptions = [];
@@ -108,30 +110,36 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
         _sessionUpdateAdapter.TextChannel = channel;
         _sessionUpdateAdapter.Reset(cancellationToken);
 
-        // If a revert primed prior-conversation context, prepend it to the user's
-        // message so it travels in the same turn the agent cannot filter out.
-        var effectiveUserMessage = userMessage;
-        if (_pendingContextPrefix is not null)
-        {
-            _logger.LogInformation("SendMessageAsync: prepending pending context prefix ({Length} chars) to user message",
-                _pendingContextPrefix.Length);
-            effectiveUserMessage = _pendingContextPrefix + userMessage;
-            _pendingContextPrefix = null;
-        }
-
-        var promptBlocks = BuildPromptBlocks(effectiveUserMessage, images, filePaths, folderPaths, selections,
-            _agentCapabilities?.PromptCapabilities?.EmbeddedContext ?? false);
-
         var promptTask = Task.Run(async () =>
         {
             try
             {
+                // Stopped before the prompt went out: nothing reaches the agent (the reader below ends the turn).
+                if (cancellationToken.IsCancellationRequested)
+                    return;
+
+                // If a revert primed prior-conversation context, prepend it to the user's message so it travels
+                // in the same turn the agent cannot filter out. Taken only here, where the prompt really goes
+                // out, so a send stopped earlier (e.g. while the agent was starting) leaves it for the next one.
+                var effectiveUserMessage = userMessage;
+                if (Interlocked.Exchange(ref _pendingContextPrefix, null) is { } prefix)
+                {
+                    _logger.LogInformation("SendMessageAsync: prepending pending context prefix ({Length} chars) to user message",
+                        prefix.Length);
+                    effectiveUserMessage = prefix + userMessage;
+                }
+
+                var promptBlocks = BuildPromptBlocks(effectiveUserMessage, images, filePaths, folderPaths, selections,
+                    _agentCapabilities?.PromptCapabilities?.EmbeddedContext ?? false);
+
                 _logger.LogInformation("SendMessageAsync: calling PromptAsync");
+                // Not cancellable: Stop ends the turn through session/cancel, and KillIfStopIgnoredAsync needs this
+                // task to stay pending until the agent really answers.
                 await _connection!.PromptAsync(new PromptRequest
                 {
                     SessionId = _sessionId!,
                     Prompt = promptBlocks
-                }, cancellationToken);
+                }, CancellationToken.None);
                 _logger.LogInformation("SendMessageAsync: PromptAsync returned");
             }
             catch (Exception ex)
@@ -217,11 +225,51 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
         _logger.LogInformation("Clearing ACP session");
         _connection?.Dispose();
         _connection = null;
+        _connectionReady = false;
+        ForgetSession();
+        _processHost.Kill();
+    }
+
+    public void ResetSession()
+    {
+        var connection = _connection;
+        if (connection is null || !_connectionReady || !_processHost.IsRunning)
+        {
+            ClearHistory();
+            return;
+        }
+
+        var oldSessionId = _sessionId;
+        _logger.LogInformation("Dropping ACP session {SessionId}; the agent process stays for the next session", oldSessionId);
+        if (oldSessionId is not null)
+        {
+            _sessionUpdateAdapter.IgnoreSession(oldSessionId);
+            if (_agentCapabilities?.SessionCapabilities?.Close is not null)
+                _ = CloseSessionAsync(connection, oldSessionId);
+        }
+        ForgetSession();
+    }
+
+    async Task CloseSessionAsync(ClientSideConnection connection, string sessionId)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await connection.CloseSessionAsync(new CloseSessionRequest { SessionId = sessionId }, timeout.Token).ConfigureAwait(false);
+            _logger.LogInformation("Closed ACP session {SessionId}", sessionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("session/close for {SessionId} failed: {Error}", sessionId, ex.Message);
+        }
+    }
+
+    void ForgetSession()
+    {
         _sessionId = null;
         _pendingContextPrefix = null;
         // A new agent session may reuse compaction ids; stale finished entries would swallow them.
         _sessionUpdateAdapter.ResetCompactions();
-        _processHost.Kill();
 
         if (_usage is not null)
         {
@@ -447,7 +495,14 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
             if (_connection is not null && _sessionId is not null && _processHost.IsRunning)
                 return;
 
+            // The agent is still up with no session (a revert dropped it): a new session on the same connection
+            // avoids a cold start (npx can take 10+ s). A wedged agent falls back to the restart below.
+            if (_connection is not null && _connectionReady && _processHost.IsRunning
+                && await TryNewSessionOnRunningAgentAsync(cancellationToken))
+                return;
+
             _connection?.Dispose();
+            _connectionReady = false;
             _processHost.Kill();
 
             _processHost.Start();
@@ -496,6 +551,7 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
             }, cancellationToken);
 
             _agentCapabilities = initResponse.AgentCapabilities;
+            _connectionReady = true;
             _logger.LogInformation("Agent initialized: {Name} v{Version}",
                 initResponse.AgentInfo?.Name, initResponse.AgentInfo?.Version);
 
@@ -539,7 +595,7 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
                     ApplyModeState(loadResponse.Modes);
                     return;
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
                     _sessionUpdateAdapter.Mode = AdapterMode.Live;
                     _logger.LogWarning("LoadSession failed, creating new session: {Error}", ex.Message);
@@ -556,27 +612,60 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
                 SessionRestoreFailed?.Invoke();
             }
 
-            var newRequest = new NewSessionRequest
-            {
-                Cwd = _options.Value.WorkingDirectory,
-                McpServers = []
-            };
-            if (additionalDirectories is not null)
-                newRequest = newRequest with { AdditionalDirectories = additionalDirectories };
-            var sessionResponse = await _connection.NewSessionAsync(newRequest, cancellationToken);
-
-            _sessionId = sessionResponse.SessionId;
-            SetActiveAdditionalDirectories(additionalDirectories ?? []);
-            _logger.LogInformation("NewSession response - modes={Modes}",
-                sessionResponse.Modes is not null ? $"{sessionResponse.Modes.AvailableModes?.Length} modes, current={sessionResponse.Modes.CurrentModeId}" : "null");
-            ApplyConfigOptions(sessionResponse.ConfigOptions);
-            ApplyModeState(sessionResponse.Modes);
-            _logger.LogInformation("ACP session created: {SessionId}", _sessionId);
+            await NewSessionAsync(additionalDirectories, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Stopped mid-handshake (a cold npx start can take many seconds). Drop the half-made connection so the
+            // next message starts the agent again; a retained session id is then loaded as usual.
+            _logger.LogInformation("Agent start-up cancelled");
+            _sessionUpdateAdapter.Mode = AdapterMode.Live;
+            _connection?.Dispose();
+            _connection = null;
+            _connectionReady = false;
+            throw;
         }
         finally
         {
             _initLock.Release();
         }
+    }
+
+    async Task<bool> TryNewSessionOnRunningAgentAsync(CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_options.Value.NewSessionOnRunningAgentTimeout);
+        try
+        {
+            _logger.LogInformation("Opening a new session on the running agent");
+            await NewSessionAsync(ResolveAdditionalDirectories(_agentCapabilities!), timeout.Token);
+            return true;
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("The running agent did not open a new session ({Error}); restarting it", ex.Message);
+            return false;
+        }
+    }
+
+    async Task NewSessionAsync(string[]? additionalDirectories, CancellationToken cancellationToken)
+    {
+        var newRequest = new NewSessionRequest
+        {
+            Cwd = _options.Value.WorkingDirectory,
+            McpServers = []
+        };
+        if (additionalDirectories is not null)
+            newRequest = newRequest with { AdditionalDirectories = additionalDirectories };
+        var sessionResponse = await _connection!.NewSessionAsync(newRequest, cancellationToken);
+
+        _sessionId = sessionResponse.SessionId;
+        SetActiveAdditionalDirectories(additionalDirectories ?? []);
+        _logger.LogInformation("NewSession response - modes={Modes}",
+            sessionResponse.Modes is not null ? $"{sessionResponse.Modes.AvailableModes?.Length} modes, current={sessionResponse.Modes.CurrentModeId}" : "null");
+        ApplyConfigOptions(sessionResponse.ConfigOptions);
+        ApplyModeState(sessionResponse.Modes);
+        _logger.LogInformation("ACP session created: {SessionId}", _sessionId);
     }
 
     /// <summary>

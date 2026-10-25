@@ -5,6 +5,7 @@ public static class AgentMethods
     public const string Authenticate = "authenticate";
     public const string Initialize = "initialize";
     public const string SessionCancel = "session/cancel";
+    public const string SessionClose = "session/close";
     public const string SessionDelete = "session/delete";
     public const string SessionLoad = "session/load";
     public const string SessionNew = "session/new";

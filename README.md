@@ -28,15 +28,15 @@ A Visual Studio extension that hosts AI coding agents - Claude Code, Cursor, or 
 
 ## Limitations
 
-VsAcp tracks the **stable ACP v1 protocol**, not the unstable v2 draft:
+VsAcp tracks the **stable ACP v1 protocol**, not v2 or any unstable proposals:
 
-- **Subagents** - no UI for agent-delegated subagent runs; subagents aren't part of the stable v1 schema
-- **Message-level agent rollback** - the stable protocol has no server-side rewind, so "Revert to here" works around it: it restores local files from a shadow-git checkpoint and re-primes the agent with the prior conversation as context, rather than truly rewinding the agent's own session state
-- **Session fork / rewind** (`session/fork`, `session/rewind`, `session/edit_prompt`) - unstable v2 RFDs, not implemented
+- **Subagents** - no UI for agent-delegated subagent runs; subagent sessions are an unstable ACP proposal, not part of the stable schema
+- **Message-level agent rollback** - the stable protocol has no way to rewind a session to an earlier message, so "Revert to here" works around it: it restores local files from a shadow-git checkpoint and re-primes the agent with the prior conversation as context, rather than truly rewinding the agent's own session state
+- **Session fork** (`session/fork`) - unstable in ACP, not implemented
 
-Separately, a couple of methods that *are* in the stable v1 schema aren't wired up yet:
+Separately, two methods that *are* in the stable v1 schema aren't wired up yet:
 
-- **Agent-driven authentication / `logout`** - authenticate and sign out via the agent CLI directly (see the setup sections above) rather than through VsAcp
+- **Agent-driven authentication / `logout`** - sign in and out through the agent's own CLI rather than through VsAcp
 
 ## Requirements
 

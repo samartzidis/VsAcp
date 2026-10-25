@@ -20,12 +20,19 @@ public interface IChatService
     /// </summary>
     event Action<string>? TitleChanged;
 
+    /// <summary>Drops the agent session and stops the agent process; the next message starts a new one.</summary>
     void ClearHistory();
+
+    /// <summary>
+    /// Drops the agent session (closing it when the agent supports <c>session/close</c>) but keeps a healthy
+    /// agent process, so the next message opens a new session on it instead of a cold start. Used by revert.
+    /// </summary>
+    void ResetSession();
 
     /// <summary>
     /// Builds a prior-conversation context block from the given messages and
     /// stores it so it is transparently prepended to the user's next SendMessageAsync
-    /// call. Call after <see cref="ClearHistory"/> during a revert.
+    /// call. Call after <see cref="ResetSession"/> during a revert.
     /// </summary>
     Task InitializeWithContextAsync(IReadOnlyList<PersistedMessage> messages, CancellationToken cancellationToken = default);
 
