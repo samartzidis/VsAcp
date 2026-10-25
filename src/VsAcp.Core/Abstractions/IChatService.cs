@@ -30,9 +30,17 @@ public interface IChatService
     void ResetSession();
 
     /// <summary>
+    /// Replaces the agent session with a copy of it that ends at the agent's message <paramref name="agentMessageId"/>
+    /// (the unstable <c>session/fork</c> with a fork point) and closes the old one. Used by revert, so the agent keeps
+    /// the real conversation up to there instead of a text summary of it. Returns the new session id, or null when the
+    /// agent cannot fork (not advertised, no live session, or the fork failed); the current session is then unchanged.
+    /// </summary>
+    Task<string?> TryForkSessionAsync(string agentMessageId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Builds a prior-conversation context block from the given messages and
     /// stores it so it is transparently prepended to the user's next SendMessageAsync
-    /// call. Call after <see cref="ResetSession"/> during a revert.
+    /// call. Call after <see cref="ResetSession"/> during a revert the agent could not fork.
     /// </summary>
     Task InitializeWithContextAsync(IReadOnlyList<PersistedMessage> messages, CancellationToken cancellationToken = default);
 

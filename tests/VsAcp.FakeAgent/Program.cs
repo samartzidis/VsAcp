@@ -22,6 +22,7 @@ namespace VsAcp.FakeAgent;
 //     "failLoad": true,                                        // session/load answers with an error (session gone)
 //     "configOptionsOnSet": [ ... ],                           // result of session/set_config_option (default: [])
 //     "updatesOnClose": [ <sessionUpdate>, ... ],              // sent for the closed session during session/close
+//     "failFork": true,                                        // session/fork answers with an error
 //     "answerDelayMs": { "session/new": 3000 },                // wait this long before answering that request
 //                                                              // (a slow cold start, e.g. npx fetching the agent)
 //     "turns": [ { "when": "text", "steps": [ <step>, ... ] }, ... ]
@@ -29,6 +30,10 @@ namespace VsAcp.FakeAgent;
 // A prompt runs the first turn whose "when" is contained in the user's text (a turn without "when" is the
 // fallback). Matching ignores a revert's <prior_conversation_context> prefix: only the text after the last
 // "My next request:" line counts, so a replayed earlier prompt never selects the wrong turn.
+//
+// session/fork works like claude-agent-acp's (advertise it with agentCapabilities.sessionCapabilities.fork): the new
+// session holds the source's message ids (the "messageId" of its "say"/"think" steps) up to the fork point in
+// _meta.jetbrains.air.fork.messageId, and a fork point the source does not hold is an error. Logged as event "forked".
 //
 // Steps (exactly one key each):
 //   {"say": "text", "messageId": "m1"}             agent_message_chunk
@@ -84,6 +89,8 @@ internal sealed class Agent
     private readonly object _logLock = new();
     private readonly ConcurrentDictionary<string, string> _sessionCwd = new();
     private readonly ConcurrentDictionary<string, bool> _closedSessions = new();
+    // Each session's message ids, in order (lock the list), which is what a fork copies.
+    private readonly ConcurrentDictionary<string, List<string>> _messageIds = new();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonObject>> _pendingClientRequests = new();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<bool>> _cancels = new();
     private volatile bool _hung;
@@ -173,6 +180,7 @@ internal sealed class Agent
                     ["configOptions"] = (_scenario["configOptionsOnSet"] as JsonArray)?.DeepClone() ?? new JsonArray()
                 },
                 "session/close" => CloseSession(parameters),
+                "session/fork" => ForkSession(parameters),
                 "session/set_mode" or "session/delete" => new JsonObject(),
                 _ => throw new RpcError(-32601, "Method not found: " + method)
             };
@@ -236,6 +244,45 @@ internal sealed class Agent
         _sessionCwd.TryRemove(sessionId, out _);
         _closedSessions[sessionId] = true;
         return new JsonObject();
+    }
+
+    private JsonObject ForkSession(JsonObject parameters)
+    {
+        if ((bool?)_scenario["failFork"] == true)
+            throw new RpcError(-32603, "Fork failed");
+
+        var sourceId = (string?)parameters["sessionId"] ?? "";
+        var messageId = (string?)parameters["_meta"]?["jetbrains"]?["air"]?["fork"]?["messageId"];
+        var source = _messageIds.GetOrAdd(sourceId, _ => new List<string>());
+        List<string> copied;
+        lock (source)
+        {
+            var at = messageId is null ? source.Count - 1 : source.LastIndexOf(messageId);
+            if (messageId is not null && at < 0)
+                throw new RpcError(-32602, $"Fork point message {messageId} was not found in session {sourceId}");
+            copied = source.Take(at + 1).ToList();
+        }
+
+        var sessionId = "fake-session-" + Interlocked.Increment(ref _nextSession);
+        _sessionCwd[sessionId] = (string?)parameters["cwd"] ?? Environment.CurrentDirectory;
+        _messageIds[sessionId] = copied;
+        Log("event", "forked", new JsonObject
+        {
+            ["from"] = sourceId,
+            ["to"] = sessionId,
+            ["messageIds"] = new JsonArray(copied.Select(id => (JsonNode?)JsonValue.Create(id)).ToArray())
+        });
+        return new JsonObject { ["sessionId"] = sessionId };
+    }
+
+    private void RecordMessageId(string sessionId, JsonNode? messageId)
+    {
+        if ((string?)messageId is not { } id) return;
+        var ids = _messageIds.GetOrAdd(sessionId, _ => new List<string>());
+        lock (ids)
+        {
+            if (!ids.Contains(id)) ids.Add(id);
+        }
     }
 
     private async Task<JsonObject> LoadSessionAsync(JsonObject parameters)
@@ -341,6 +388,7 @@ internal sealed class Agent
                 ["content"] = new JsonObject { ["type"] = "text", ["text"] = (string?)step["say"] }
             };
             if (step["messageId"] is { } messageId) update["messageId"] = messageId.DeepClone();
+            RecordMessageId(sessionId, step["messageId"]);
             SendUpdate(sessionId, update);
         }
         else if (step.ContainsKey("think"))
@@ -351,6 +399,7 @@ internal sealed class Agent
                 ["content"] = new JsonObject { ["type"] = "text", ["text"] = (string?)step["think"] }
             };
             if (step["messageId"] is { } messageId) update["messageId"] = messageId.DeepClone();
+            RecordMessageId(sessionId, step["messageId"]);
             SendUpdate(sessionId, update);
         }
         else if (step["update"] is JsonNode rawUpdate)

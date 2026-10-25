@@ -105,6 +105,7 @@ public class TurnEndOrderingTests
         public event Action<string>? TitleChanged { add { } remove { } }
         public void ClearHistory() { }
         public void ResetSession() { }
+        public Task<string?> TryForkSessionAsync(string agentMessageId, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
         public Task InitializeWithContextAsync(IReadOnlyList<PersistedMessage> messages, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public void Cancel() { }
         public decimal? GetSessionCost() => null;

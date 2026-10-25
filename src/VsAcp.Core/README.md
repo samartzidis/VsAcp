@@ -137,7 +137,9 @@ There is no pre-write approval gate: the agent's file write always succeeds imme
 ## Revert to here
 
 1. Every turn is preceded by a checkpoint (`ICheckpointService.CreateCheckpointAsync`), whose id is stored on the user message.
-2. `ChatSessionController.RevertAsync(checkpointId, includeOther)` flushes pending persistence, then `RevertCoordinator`: restores the files the agent reported changing in the discarded turns (or every file, if `includeOther` or the agent's files are unknown), truncates persisted history by ordinal, deletes the discarded checkpoints, clears the agent-side session, and primes a "prior conversation context" prefix via `IChatService.InitializeWithContextAsync` for the next prompt.
+2. `ChatSessionController.RevertAsync(checkpointId, includeOther)` flushes pending persistence, then `RevertCoordinator`: restores the files the agent reported changing in the discarded turns (or every file, if `includeOther` or the agent's files are unknown), truncates persisted history by ordinal, deletes the discarded checkpoints, and then gives the agent the kept conversation:
+   - when the agent advertises the unstable `sessionCapabilities.fork` and the last kept message is a reply with an agent message id (`RevertCoordinator.ForkPoint`), `IChatService.TryForkSessionAsync` forks the agent session at that reply (`session/fork`, fork point in `_meta.jetbrains.air.fork`, as claude-agent-acp reads it), closes the old one and persists the fork's id;
+   - otherwise (Cursor and other agents without fork, or a fork that fails or times out) it clears the agent-side session and primes a "prior conversation context" prefix via `IChatService.InitializeWithContextAsync` for the next prompt.
 3. `ChatSessionController.PreviewRevertAsync(checkpointId)` computes the same split (agent files vs. everything else) without touching anything, for a confirmation UI.
 
 ## Registration

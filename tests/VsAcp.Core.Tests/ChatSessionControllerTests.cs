@@ -42,6 +42,36 @@ public class ChatSessionControllerTests
         Assert.Equal(h.Messages[0].CheckpointId, reopened.Messages[0].CheckpointId);
     }
 
+    // 2026-10-25: a tab reopened in the same VS run resumed the agent session id the host read at solution open, so
+    // after a revert it loaded the agent session from before the revert, and a chat begun in that run started over.
+    [Theory]
+    [InlineData(false, false, "fake-session-1")] // a turn saved the id
+    [InlineData(true, true, "fake-session-2")]   // a revert forked the session
+    [InlineData(true, false, null)]              // a revert reset the session; the next message starts a new one
+    public async Task Reopening_a_tab_resumes_the_agent_session_the_store_holds_now(bool revert, bool canFork, string? expected)
+    {
+        using var h = await ChatHarness.CreateAsync(new
+        {
+            agentCapabilities = canFork
+                ? (object)new { loadSession = false, sessionCapabilities = new { fork = new { } } }
+                : new { loadSession = false },
+            turns = new[] { new { steps = new object[] { new { say = "ok", messageId = "m-ok" } } } }
+        });
+        Assert.Null(h.Entry.AcpSessionId); // what the host's chat list read when the chat was created
+        await h.SendAsync("one");
+        if (revert)
+        {
+            await h.SendAsync("two");
+            await h.RevertToUserMessageAsync(1);
+        }
+        await h.FlushAsync(); // the closed tab's queued writes land
+
+        using var controller = Bare(new ChatSession());
+        controller.AttachStore(h.Store, h.Entry.Id);
+
+        Assert.Equal(expected, await controller.ReadAcpSessionIdAsync());
+    }
+
     [Fact]
     public async Task Restoring_before_a_store_is_attached_does_nothing()
     {

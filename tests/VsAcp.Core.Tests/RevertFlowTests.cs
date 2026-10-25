@@ -207,8 +207,9 @@ public class RevertFlowTests
         Assert.EndsWith("three", prompts[2]);
         Assert.DoesNotContain("<prior_conversation_context>", prompts[3]);
 
-        // The revert drops the agent's session; the next send starts a fresh one.
+        // The revert drops the agent's session (this agent cannot fork it); the next send starts a fresh one.
         Assert.Equal(2, h.Received("session/new").Count);
+        Assert.Empty(h.Received("session/fork"));
     }
 
     [Fact]
@@ -407,5 +408,163 @@ public class RevertFlowTests
         await h.SendAsync("again");
 
         Assert.DoesNotContain("<prior_conversation_context>", h.PromptTexts().Last());
+    }
+
+    // ---- an agent that can fork its session keeps the real conversation ----
+
+    private static object CanFork() => new { loadSession = false, sessionCapabilities = new { fork = new { }, close = new { } } };
+
+    // Like claude-agent-acp, every reply carries the agent's message id.
+    private static object[] ForkTurns() => new object[]
+    {
+        new
+        {
+            when = "one",
+            steps = new object[]
+            {
+                new { write = new { path = "a.txt", content = "one" } },
+                new { say = "wrote one", messageId = "m-one" }
+            }
+        },
+        new
+        {
+            when = "two",
+            steps = new object[]
+            {
+                new { write = new { path = "a.txt", content = "two" } },
+                new { say = "wrote two", messageId = "m-two" }
+            }
+        },
+        new { steps = new object[] { new { say = "ok", messageId = "m-ok" } } }
+    };
+
+    private static string? ForkPointOf(System.Text.Json.Nodes.JsonObject forkRequest) =>
+        (string?)forkRequest["_meta"]?["jetbrains"]?["air"]?["fork"]?["messageId"];
+
+    [Fact]
+    public async Task A_revert_forks_the_agent_session_at_the_last_kept_reply_when_the_agent_can()
+    {
+        using var h = await ChatHarness.CreateAsync(new { agentCapabilities = CanFork(), turns = ForkTurns() });
+        h.WriteFile("a.txt", "orig");
+        await h.SendAsync("one");
+        await h.SendAsync("two");
+
+        await h.RevertToUserMessageAsync(1);
+
+        var fork = Assert.Single(h.Received("session/fork"));
+        Assert.Equal("fake-session-1", (string?)fork["sessionId"]);
+        Assert.Equal("m-one", ForkPointOf(fork));
+        Assert.Equal("one", h.ReadFile("a.txt"));
+        // The fork is a session of its own, saved at once, so a VS restart before the next message loads it.
+        Assert.Equal("fake-session-2", (await h.IndexEntryAsync()).AcpSessionId);
+
+        await h.SendAsync("three");
+
+        var prompt = h.Received("session/prompt").Last();
+        Assert.Equal("fake-session-2", (string?)prompt["sessionId"]);
+        Assert.Equal("three", h.PromptTexts().Last());
+        Assert.Single(h.Received("session/new"));
+        Assert.Equal("fake-session-1", (string?)Assert.Single(h.Received("session/close"))["sessionId"]);
+        Assert.Single(h.AgentProcessIds());
+    }
+
+    [Fact]
+    public async Task A_forked_session_is_forked_again_by_the_next_revert()
+    {
+        // The copy keeps the agent's message ids, so a revert in it finds its fork point there.
+        using var h = await ChatHarness.CreateAsync(new { agentCapabilities = CanFork(), turns = ForkTurns() });
+        await h.SendAsync("one");
+        await h.SendAsync("two");
+        await h.RevertToUserMessageAsync(1);
+        await h.SendAsync("two again");
+
+        await h.RevertToUserMessageAsync(1);
+        await h.SendAsync("three");
+
+        var forks = h.Received("session/fork");
+        Assert.Equal(2, forks.Count);
+        Assert.Equal("fake-session-2", (string?)forks[1]["sessionId"]);
+        Assert.Equal("m-one", ForkPointOf(forks[1]));
+        Assert.Equal("fake-session-3", (string?)h.Received("session/prompt").Last()["sessionId"]);
+        Assert.DoesNotContain(h.PromptTexts(), p => p.Contains("<prior_conversation_context>"));
+    }
+
+    [Fact]
+    public async Task A_fork_the_agent_refuses_falls_back_to_the_prior_conversation_context()
+    {
+        using var h = await ChatHarness.CreateAsync(new { agentCapabilities = CanFork(), failFork = true, turns = ForkTurns() });
+        await h.SendAsync("one");
+        await h.SendAsync("two");
+
+        await h.RevertToUserMessageAsync(1);
+
+        Assert.Single(h.Received("session/fork"));
+        Assert.Null((await h.IndexEntryAsync()).AcpSessionId);
+
+        await h.SendAsync("three");
+
+        Assert.Equal("fake-session-2", (string?)h.Received("session/prompt").Last()["sessionId"]);
+        Assert.Contains("<prior_conversation_context>", h.PromptTexts().Last());
+        Assert.Contains("wrote one", h.PromptTexts().Last());
+        Assert.EndsWith("three", h.PromptTexts().Last());
+    }
+
+    [Fact]
+    public async Task A_fork_that_does_not_answer_in_time_falls_back_to_the_prior_conversation_context()
+    {
+        using var h = await ChatHarness.CreateAsync(new
+            {
+                agentCapabilities = CanFork(),
+                answerDelayMs = new Dictionary<string, int> { ["session/fork"] = 1500 },
+                turns = ForkTurns()
+            },
+            o => o.NewSessionOnRunningAgentTimeout = TimeSpan.FromMilliseconds(300));
+        await h.SendAsync("one");
+        await h.SendAsync("two");
+
+        await h.RevertToUserMessageAsync(1);
+        var result = await h.SendWithinAsync("three");
+
+        Assert.Equal(TurnResult.Completed, result);
+        Assert.Contains("<prior_conversation_context>", h.PromptTexts().Last());
+        Assert.Contains("wrote one", h.PromptTexts().Last());
+    }
+
+    [Fact]
+    public async Task A_kept_turn_without_a_reply_id_is_not_forked()
+    {
+        using var h = await ChatHarness.CreateAsync(new { agentCapabilities = CanFork(), turns = Turns() });
+        await h.SendAsync("one");
+        await h.SendAsync("two");
+
+        await h.RevertToUserMessageAsync(1);
+        await h.SendAsync("three");
+
+        Assert.Empty(h.Received("session/fork"));
+        Assert.Contains("wrote one", h.PromptTexts().Last());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task The_fork_suffix_of_an_agent_title_is_dropped_when_the_agent_forks(bool canFork)
+    {
+        // The Claude Agent SDK names a fork "<title> (fork)", and claude-agent-acp publishes that title.
+        using var h = await ChatHarness.CreateAsync(new
+        {
+            agentCapabilities = canFork ? CanFork() : new { loadSession = false },
+            turns = new object[]
+            {
+                new { steps = new object[]
+                {
+                    new { update = new { sessionUpdate = "session_info_update", title = "Pelican facts (fork) (fork)" } },
+                    new { say = "ok", messageId = "m-ok" }
+                } }
+            }
+        });
+
+        await h.SendAsync("hi");
+
+        Assert.Equal(canFork ? "Pelican facts" : "Pelican facts (fork) (fork)", (await h.IndexEntryAsync()).Title);
     }
 }

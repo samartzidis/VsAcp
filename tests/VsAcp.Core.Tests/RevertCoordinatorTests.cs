@@ -56,4 +56,42 @@ public class RevertCoordinatorTests
     {
         Assert.Null(RevertCoordinator.AgentChangedFiles(new[] { User(0, "c0") }, "missing"));
     }
+
+    // ---- where the agent session is forked ----
+
+    private static PersistedMessage Reply(int ordinal, string? agentMessageId) =>
+        new() { Ordinal = ordinal, ItemType = "Assistant", Content = "reply", AgentMessageId = agentMessageId };
+
+    [Fact]
+    public void The_fork_point_is_the_last_kept_reply()
+    {
+        var kept = new[] { User(0, "c0"), Reply(1, "m1"), Step(2), Reply(3, "m3"), User(4, "c4"), Reply(5, "m5") };
+
+        Assert.Equal("m5", RevertCoordinator.ForkPoint(kept));
+    }
+
+    [Fact]
+    public void A_compaction_after_the_last_reply_does_not_move_the_fork_point()
+    {
+        var kept = new[] { User(0, "c0"), Reply(1, "m1"), new PersistedMessage { Ordinal = 2, ItemType = "Compaction" } };
+
+        Assert.Equal("m1", RevertCoordinator.ForkPoint(kept));
+    }
+
+    [Fact]
+    public void A_kept_turn_that_ended_in_a_tool_call_or_thinking_has_no_fork_point()
+    {
+        Assert.Null(RevertCoordinator.ForkPoint(new[] { User(0, "c0"), Reply(1, "m1"), Step(2) }));
+        Assert.Null(RevertCoordinator.ForkPoint(new[]
+        {
+            User(0, "c0"), Reply(1, "m1"), new PersistedMessage { Ordinal = 2, ItemType = "Thinking", AgentMessageId = "m2" }
+        }));
+    }
+
+    [Fact]
+    public void A_last_reply_without_an_agent_message_id_or_nothing_kept_has_no_fork_point()
+    {
+        Assert.Null(RevertCoordinator.ForkPoint(new[] { User(0, "c0"), Reply(1, "m1"), User(2, "c2"), Reply(3, null) }));
+        Assert.Null(RevertCoordinator.ForkPoint(Array.Empty<PersistedMessage>()));
+    }
 }

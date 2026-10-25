@@ -25,8 +25,9 @@ public sealed class RevertPreview
 
 /// <summary>
 /// Orchestrates the data/agent side of "Revert to here": restore the workspace to a checkpoint,
-/// truncate persisted history by creation-order ordinal, reset the agent session, and prime the
-/// prior-conversation context prefix. The caller owns UI concerns (busy state, clearing/reloading
+/// truncate persisted history by creation-order ordinal, then fork the agent session at the last kept reply
+/// (when the agent supports <c>session/fork</c>) or else reset it and prime the prior-conversation context
+/// prefix. The caller owns UI concerns (busy state, clearing/reloading
 /// the session, notifying the host to reload editors).
 /// <para>
 /// The restore covers the files the agent reported changing in the discarded turns (the tool steps'
@@ -142,21 +143,26 @@ public sealed class RevertCoordinator
         // tab of the workspace, so "everything newer than the target" would delete other tabs' restore points.
         await _checkpointService.DeleteCheckpointsAsync(discardedCheckpointIds);
 
-        // 5. Drop the old agent session (the agent process stays for the next one) and erase the persisted
+        // 5. An agent that can fork its session copies it up to the last kept reply: it keeps the real conversation
+        // (tool calls and results included), and the copy is a session of its own that a later VS load restores.
+        var forkPoint = ForkPoint(messagesToKeep);
+        var forkedSessionId = _chatService is not null && forkPoint is not null
+            ? await _chatService.TryForkSessionAsync(forkPoint)
+            : null;
+        Serilog.Log.Information("[Revert] {Outcome}", forkedSessionId is not null ? $"Forked the agent session at {forkPoint}"
+            : forkPoint is null ? "No fork point in the kept conversation; resetting the agent session"
+            : "The agent did not fork its session; resetting it");
+        if (forkedSessionId is not null)
+        {
+            await SetPersistedAcpSessionIdAsync(store, sid, forkedSessionId);
+            return target;
+        }
+
+        // Otherwise drop the old agent session (the agent process stays for the next one) and erase the persisted
         // ACP session ID so that on the next VS load, EnablePersistence gets null and never calls
         // session/load with the old ID (which would replay the full pre-revert history from Cursor's backend).
         _chatService?.ResetSession();
-        if (store is not null && sid is not null)
-        {
-            var index = await store.GetSessionIndexAsync();
-            var entry = index.FirstOrDefault(e => e.Id == sid);
-            if (entry is not null && entry.AcpSessionId is not null)
-            {
-                entry.AcpSessionId = null;
-                await store.UpdateSessionAsync(entry);
-                Serilog.Log.Information("[Revert] Cleared persisted AcpSessionId for session {SessionId}", sid);
-            }
-        }
+        await SetPersistedAcpSessionIdAsync(store, sid, null);
 
         // 5b. Prime the prior-conversation context: a prefix block transparently prepended to the
         // user's first real message after the revert (no new ACP session here - that happens lazily
@@ -177,5 +183,31 @@ public sealed class RevertCoordinator
         }
 
         return target;
+    }
+
+    /// <summary>
+    /// The agent's id of the message that ends the conversation a revert keeps, to fork the agent session at: the
+    /// last kept message, when it is a reply that carries one. Null when nothing is kept, when the kept turn ended in
+    /// a tool call or thinking (stopped mid-way: a fork there could leave a tool call without its result), or when the
+    /// reply has no id (an agent that sends none, or history saved before ids were kept).
+    /// </summary>
+    public static string? ForkPoint(IReadOnlyList<PersistedMessage> messagesToKeep)
+    {
+        var last = messagesToKeep.LastOrDefault(m => m.ItemType is nameof(ChatItemType.User) or nameof(ChatItemType.Assistant)
+            or nameof(ChatItemType.Thinking) or nameof(ChatItemType.ToolStep));
+        return last is { ItemType: nameof(ChatItemType.Assistant), AgentMessageId: { Length: > 0 } id } ? id : null;
+    }
+
+    private static async Task SetPersistedAcpSessionIdAsync(ISessionStore? store, string? sid, string? acpSessionId)
+    {
+        if (store is null || sid is null) return;
+
+        var index = await store.GetSessionIndexAsync();
+        var entry = index.FirstOrDefault(e => e.Id == sid);
+        if (entry is null || entry.AcpSessionId == acpSessionId) return;
+
+        entry.AcpSessionId = acpSessionId;
+        await store.UpdateSessionAsync(entry);
+        Serilog.Log.Information("[Revert] Persisted AcpSessionId {AcpSessionId} for session {SessionId}", acpSessionId ?? "(none)", sid);
     }
 }

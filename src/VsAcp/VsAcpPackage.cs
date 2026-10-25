@@ -534,9 +534,7 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         if (session.PersistedId is not null
             && _instance._sessionStore is not null)
         {
-            viewModel.EnablePersistence(
-                _instance._sessionStore!,
-                session.PersistedId, session.AcpSessionId);
+            viewModel.EnablePersistence(_instance._sessionStore!, session.PersistedId);
 
             if (!string.IsNullOrEmpty(session.Name) && session.Name != "New Session")
                 viewModel.SessionTitle = session.Name;

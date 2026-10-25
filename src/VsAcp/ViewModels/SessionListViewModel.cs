@@ -16,11 +16,6 @@ public partial class SessionInfo : ObservableObject
     public string? PersistedId { get; set; }
 
     /// <summary>
-    /// The ACP backend session ID. Stored so LoadSession can replay history on restore.
-    /// </summary>
-    public string? AcpSessionId { get; set; }
-
-    /// <summary>
     /// Agent executable saved at session creation time. Null for sessions created before
     /// this field was introduced (treated as "use current global settings").
     /// </summary>
@@ -99,7 +94,6 @@ public partial class SessionListViewModel : ObservableObject
             var info = new SessionInfo
             {
                 PersistedId = entry.Id,
-                AcpSessionId = entry.AcpSessionId,
                 AgentCommand = entry.AgentCommand,
                 AgentArgs = entry.AgentArgs,
                 Name = entry.Title,

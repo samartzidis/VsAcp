@@ -7,6 +7,8 @@ public static class AgentMethods
     public const string SessionCancel = "session/cancel";
     public const string SessionClose = "session/close";
     public const string SessionDelete = "session/delete";
+    /// <summary>Unstable (see UnstableTypes.cs).</summary>
+    public const string SessionFork = "session/fork";
     public const string SessionLoad = "session/load";
     public const string SessionNew = "session/new";
     public const string SessionPrompt = "session/prompt";

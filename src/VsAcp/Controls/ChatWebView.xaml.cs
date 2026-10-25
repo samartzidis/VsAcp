@@ -66,10 +66,22 @@ public partial class ChatWebView : UserControl
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        Unloaded += (_, _) => LogView("unloaded");
+        IsVisibleChanged += (_, e) => LogView((bool)e.NewValue ? "shown" : "hidden");
+    }
+
+    // The control's life in the WPF tree, with the windows it sits in: a page that stops updating can then be matched
+    // against the tab being moved, re-created or reparented (a changed window handle).
+    private void LogView(string what)
+    {
+        var window = PresentationSource.FromVisual(this) is System.Windows.Interop.HwndSource source ? source.Handle : IntPtr.Zero;
+        Serilog.Log.Debug("[ChatWebView {Tab:l}] View {What:l} (window {Window:X}, WebView window {WebViewWindow:X})",
+            LogTag, what, window.ToInt64(), WebView.Handle.ToInt64());
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        LogView("loaded");
         if (_initialized) return;
         _initialized = true;
         UiThread.Post("WebView2 init", InitializeWebViewAsync);
@@ -90,6 +102,10 @@ public partial class ChatWebView : UserControl
             WebView.CoreWebView2.Settings.IsZoomControlEnabled = false;
 
             WebView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+            // A crashed or hung page process (or browser/GPU process) is otherwise silent: the page just stops.
+            WebView.CoreWebView2.ProcessFailed += (_, args) =>
+                Serilog.Log.Warning("[ChatWebView {Tab:l}] WebView2 process failed: {Kind}, reason {Reason}, exit code {ExitCode}, {Process}",
+                    LogTag, args.ProcessFailedKind, args.Reason, args.ExitCode, args.ProcessDescription);
 
             // The page is a closed app: it never navigates and never opens windows. Links go to the system
             // browser (http/https only); the one allowed navigation is loading the page itself.
@@ -191,6 +207,9 @@ public partial class ChatWebView : UserControl
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             var type = root.GetProperty("type").GetString();
+            // Shows what the page sent and when (e.g. whether a Stop click arrived); the per-keystroke one is left out.
+            if (type != "composer.changed")
+                Serilog.Log.Debug("[ChatWebView {Tab:l}] Page sent {Type:l}", LogTag, type);
 
             if (type == "openFile")
             {
@@ -310,8 +329,15 @@ public partial class ChatWebView : UserControl
         _syncs[syncId] = ack;
         try
         {
-            PostBridgeMessage(new { type = "messages.sync", syncId, messages = messages.ToList() });
-            if (await Task.WhenAny(ack.Task, Task.Delay(SyncAckTimeout)) == ack.Task) return true;
+            var list = messages.ToList();
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            PostBridgeMessage(new { type = "messages.sync", syncId, messages = list });
+            Serilog.Log.Debug("[ChatWebView {Tab:l}] Sync {SyncId:l} sent ({Count} messages)", LogTag, syncId, list.Count);
+            if (await Task.WhenAny(ack.Task, Task.Delay(SyncAckTimeout)) == ack.Task)
+            {
+                Serilog.Log.Debug("[ChatWebView {Tab:l}] Sync {SyncId:l} confirmed after {Ms} ms", LogTag, syncId, clock.ElapsedMilliseconds);
+                return true;
+            }
 
             Serilog.Log.Warning("[ChatWebView] The page did not confirm the message sync within {Seconds}s", SyncAckTimeout.TotalSeconds);
             return false;

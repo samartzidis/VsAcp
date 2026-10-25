@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -207,13 +208,19 @@ public sealed class ClientSideConnection : IDisposable, IAcpAgent
         });
     }
 
+    // Requests and responses can be unstable types (UnstableTypes.cs), which live in a context of their own.
+    static readonly JsonSerializerOptions RequestOptions = new(AcpJsonSerializerContext.Default.Options)
+    {
+        TypeInfoResolver = JsonTypeInfoResolver.Combine(AcpJsonSerializerContext.Default, AcpUnstableJsonSerializerContext.Default)
+    };
+
     async ValueTask<TResponse> RequestAsync<TRequest, TResponse>(string method, TRequest request, CancellationToken cancellationToken)
     {
         var response = await endpoint.SendRequestAsync(new JsonRpcRequest
         {
             Method = method,
             Id = default,
-            Params = JsonSerializer.SerializeToElement(request, AcpJsonSerializerContext.Default.Options.GetTypeInfo<TRequest>())
+            Params = JsonSerializer.SerializeToElement(request, RequestOptions.GetTypeInfo<TRequest>())
         }, cancellationToken);
 
         if (response.Error != null)
@@ -235,7 +242,7 @@ public sealed class ClientSideConnection : IDisposable, IAcpAgent
 
         try
         {
-            return JsonSerializer.Deserialize(response.Result.Value, AcpJsonSerializerContext.Default.Options.GetTypeInfo<TResponse>())!;
+            return JsonSerializer.Deserialize(response.Result.Value, RequestOptions.GetTypeInfo<TResponse>())!;
         }
         catch (JsonException ex)
         {
@@ -304,6 +311,11 @@ public sealed class ClientSideConnection : IDisposable, IAcpAgent
     public ValueTask<CloseSessionResponse> CloseSessionAsync(CloseSessionRequest request, CancellationToken cancellationToken = default)
     {
         return RequestAsync<CloseSessionRequest, CloseSessionResponse>(AgentMethods.SessionClose, request, cancellationToken);
+    }
+
+    public ValueTask<ForkSessionResponse> ForkSessionAsync(ForkSessionRequest request, CancellationToken cancellationToken = default)
+    {
+        return RequestAsync<ForkSessionRequest, ForkSessionResponse>(AgentMethods.SessionFork, request, cancellationToken);
     }
 
     public async ValueTask<JsonElement> ExtMethodAsync(string method, JsonElement request, CancellationToken cancellationToken = default)

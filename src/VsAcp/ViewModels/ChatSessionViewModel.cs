@@ -475,16 +475,25 @@ public partial class ChatSessionViewModel : ObservableObject, IDisposable
     /// <summary>
     /// Starts the agent connection. Safe to call multiple times — no-ops if already connecting or connected.
     /// </summary>
-    public void StartConnection()
+    public void StartConnection() => StartConnection(resumeStoredSession: false);
+
+    /// <param name="resumeStoredSession">First resume the agent session the store holds for this chat (sending stays
+    /// disabled meanwhile, so no message starts a new session before it is known).</param>
+    private void StartConnection(bool resumeStoredSession)
     {
-        if (_acpSessionLifecycle is null || IsInitializing) 
+        if (_acpSessionLifecycle is null || IsInitializing)
             return;
 
         IsInitializing = true;
 
         _ = Task.Run(async () =>
         {
-            try { await _acpSessionLifecycle.LoadSessionAsync(); }
+            try
+            {
+                if (resumeStoredSession && await _controller.ReadAcpSessionIdAsync() is { } acpSessionId)
+                    _acpSessionLifecycle.RestoreHistory(acpSessionId);
+                await _acpSessionLifecycle.LoadSessionAsync();
+            }
             catch (VsAcp.Core.Acp.AgentConfigurationException ex)
             {
                 Serilog.Log.Warning("StartConnection: agent configuration error - {Message}", ex.Message);
@@ -514,22 +523,13 @@ public partial class ChatSessionViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Enables persistence for this chat session.
-    /// When an ACP session ID is provided, eagerly connects to the agent
-    /// so it has context of prior conversation, and restores saved messages
-    /// from the local store for UI display.
+    /// Eagerly connects to the agent, resuming the agent session the store holds for this chat (if any) so it has
+    /// context of prior conversation, and restores saved messages from the local store for UI display.
     /// </summary>
-    public void EnablePersistence(ISessionStore sessionStore, string sessionId, string? acpSessionId)
+    public void EnablePersistence(ISessionStore sessionStore, string sessionId)
     {
         _controller.AttachStore(sessionStore, sessionId);
-
-        if (_acpSessionLifecycle is not null)
-        {
-            if (acpSessionId is not null)
-                _acpSessionLifecycle.RestoreHistory(acpSessionId);
-
-            StartConnection();
-        }
-
+        StartConnection(resumeStoredSession: true);
         _ = _controller.RestoreAsync();
     }
 

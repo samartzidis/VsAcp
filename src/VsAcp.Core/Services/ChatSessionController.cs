@@ -149,8 +149,14 @@ public sealed class ChatSessionController : IDisposable
         }
         finally
         {
-            // Self-heal: reconcile the view against the session source of truth.
-            _queue.Post(_session.RequestResync);
+            // Self-heal: reconcile the view against the session source of truth. Both ends are logged, so a view
+            // that never got its end-of-turn sync shows whether the request was queued and whether it ran.
+            Serilog.Log.Debug("[ChatSession] Turn over; end-of-turn resync queued");
+            _queue.Post(() =>
+            {
+                Serilog.Log.Debug("[ChatSession] End-of-turn resync running");
+                _session.RequestResync();
+            });
         }
     }
 
@@ -344,6 +350,20 @@ public sealed class ChatSessionController : IDisposable
         {
             Serilog.Log.Warning(ex, "Restoring session messages failed");
         }
+    }
+
+    /// <summary>
+    /// The agent session id stored for this chat now, to resume when its tab opens: turns, reverts and failed restores
+    /// change it after the host read its chat list. Null when there is none, or before <see cref="AttachStore"/>.
+    /// </summary>
+    public async Task<string?> ReadAcpSessionIdAsync()
+    {
+        var store = Store;
+        var sessionId = SessionId;
+        if (store is null || sessionId is null) return null;
+
+        await FlushAsync();
+        return (await store.GetSessionIndexAsync()).FirstOrDefault(e => e.Id == sessionId)?.AcpSessionId;
     }
 
     // ---- revert ----

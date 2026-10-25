@@ -76,7 +76,11 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
             _usage = usage;
             UsageChanged?.Invoke();
         };
-        _sessionUpdateAdapter.TitleUpdated += title => TitleChanged?.Invoke(title);
+        _sessionUpdateAdapter.TitleUpdated += title =>
+        {
+            if (CanFork) title = WithoutForkSuffix(title);
+            if (title.Length > 0) TitleChanged?.Invoke(title);
+        };
         _logger = logger;
     }
 
@@ -261,6 +265,78 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
         catch (Exception ex)
         {
             _logger.LogWarning("session/close for {SessionId} failed: {Error}", sessionId, ex.Message);
+        }
+    }
+
+    // sessionCapabilities.fork is unstable, so the stable types leave it in the extension data.
+    bool CanFork => _agentCapabilities?.SessionCapabilities?.ExtensionData?.ContainsKey("fork") == true;
+
+    // The Claude Agent SDK names a fork "<source title> (fork)" ("Forked session (fork)" when the source has none), and
+    // claude-agent-acp publishes that stored title, after a later load too. A revert's fork is the same chat, so the
+    // suffix (one per fork in a chain) is dropped and the placeholder ignored.
+    static string WithoutForkSuffix(string title)
+    {
+        const string suffix = " (fork)";
+        while (title.EndsWith(suffix, StringComparison.Ordinal))
+            title = title.Substring(0, title.Length - suffix.Length).TrimEnd();
+        return title == "Forked session" ? "" : title;
+    }
+
+    public async Task<string?> TryForkSessionAsync(string agentMessageId, CancellationToken cancellationToken = default)
+    {
+        // Behind the init lock: a session still being loaded (a tab just reopened) is forked once it is there.
+        await _initLock.WaitAsync(cancellationToken);
+        try
+        {
+            var connection = _connection;
+            var sourceId = _sessionId;
+            if (connection is null || !_connectionReady || !_processHost.IsRunning || sourceId is null || !CanFork)
+                return null;
+
+            var additionalDirectories = ResolveAdditionalDirectories(_agentCapabilities!);
+            var request = new ForkSessionRequest
+            {
+                SessionId = sourceId,
+                Cwd = _options.Value.WorkingDirectory,
+                McpServers = [],
+                AdditionalDirectories = additionalDirectories,
+                // The fork point: claude-agent-acp reads it from JetBrains AIR's extension, as an agent_message_chunk
+                // messageId, and copies the session up to and including that message. Without it, the whole session.
+                Meta = JsonSerializer.SerializeToElement(new { jetbrains = new { air = new { fork = new { version = 1, messageId = agentMessageId } } } })
+            };
+
+            ForkSessionResponse response;
+            using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                timeout.CancelAfter(_options.Value.NewSessionOnRunningAgentTimeout);
+                try
+                {
+                    _logger.LogInformation("Forking ACP session {SessionId} at message {MessageId}", sourceId, agentMessageId);
+                    response = await connection.ForkSessionAsync(request, timeout.Token);
+                }
+                catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // E.g. the message is from an earlier agent session (before a revert the agent could not fork).
+                    _logger.LogWarning("session/fork of {SessionId} at {MessageId} failed: {Error}", sourceId, agentMessageId, ex.Message);
+                    return null;
+                }
+            }
+
+            _sessionUpdateAdapter.IgnoreSession(sourceId);
+            if (_agentCapabilities?.SessionCapabilities?.Close is not null)
+                _ = CloseSessionAsync(connection, sourceId);
+            ForgetSession();
+
+            _sessionId = response.SessionId;
+            SetActiveAdditionalDirectories(additionalDirectories ?? []);
+            ApplyConfigOptions(response.ConfigOptions);
+            ApplyModeState(response.Modes);
+            _logger.LogInformation("ACP session {SessionId} forked from {SourceId}", _sessionId, sourceId);
+            return _sessionId;
+        }
+        finally
+        {
+            _initLock.Release();
         }
     }
 
