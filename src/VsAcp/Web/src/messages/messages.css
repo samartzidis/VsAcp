@@ -74,14 +74,18 @@
     bottom: 2px;
     right: 2px;
     display: flex;
-    gap: 2px;
+    /* wide enough that a click meant for Copy does not land on Revert */
+    gap: 8px;
     z-index: 10;
 }
-/* A reply can be one line high: its actions sit beside the copy button instead of under it */
+/* A reply's actions (fork, copy) are a row of their own under it, not floating over its text */
 .msg-assistant .msg-actions {
-    top: 2px;
-    bottom: auto;
-    right: 22px;
+    position: static;
+    justify-content: flex-end;
+    min-height: 18px;
+}
+.msg-actions .msg-copy-btn {
+    position: static;
 }
 .msg-action-btn {
     background: transparent;
@@ -349,6 +353,43 @@
     padding: 10px 12px;
     margin: 0.5em 0;
     overflow-x: auto;
+}
+/* A fenced block in a reply (see addCodeCopyButtons): the wrapper carries the margin and anchors the copy button */
+.md-content .code-block {
+    position: relative;
+    margin: 0.5em 0;
+}
+.md-content .code-block > pre {
+    margin: 0;
+}
+.code-copy-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px;
+    background: var(--pre-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+    line-height: 1;
+}
+.code-block:hover .code-copy-btn,
+.code-copy-btn:focus-visible {
+    opacity: 0.85;
+}
+.code-copy-btn:hover {
+    opacity: 1;
+    color: var(--text-primary);
+}
+.code-copy-btn.copied {
+    opacity: 1;
+    color: var(--success);
 }
 .md-content pre code:not(.hljs) {
     background: none;

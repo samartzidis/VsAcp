@@ -98,9 +98,9 @@ function UserMessage({ m }: { m: ChatMessage }) {
         <Chips items={m.selections.map((s) => ({ text: s.label, title: s.tooltip }))} />
       )}
       <RichContent kind="text" text={m.content} class="md-content msg-content user-text" elRef={content} />
-      <CopyButton getText={() => content.current?.innerText ?? ''} />
+      {/* one row with Copy rightmost, as on replies, and Fork between it and Revert: in a one-line bubble a corner
+          Copy sat right above Revert */}
       <div class="msg-actions">
-        <ForkButton messageId={m.id} />
         {m.checkpointId && (
           <button
             type="button"
@@ -115,6 +115,8 @@ function UserMessage({ m }: { m: ChatMessage }) {
             <RevertIcon />
           </button>
         )}
+        <ForkButton messageId={m.id} />
+        <CopyButton getText={() => content.current?.innerText ?? ''} />
       </div>
     </div>
   );
@@ -130,14 +132,14 @@ function AssistantMessage({ m }: { m: ChatMessage }) {
           text={m.content}
           class={m.isStreaming ? 'md-content msg-content streaming-cursor' : 'md-content msg-content'}
           elRef={content}
+          copyCodeBlocks={!m.isStreaming}
         />
       </div>
-      <CopyButton getText={() => content.current?.innerText ?? ''} />
-      {!m.isStreaming && (
-        <div class="msg-actions">
-          <ForkButton messageId={m.id} />
-        </div>
-      )}
+      {/* its own row under the reply, so the icons never cover text; always there, so a reply does not grow when it ends */}
+      <div class="msg-actions">
+        {!m.isStreaming && <ForkButton messageId={m.id} />}
+        <CopyButton getText={() => content.current?.innerText ?? ''} />
+      </div>
     </div>
   );
 }
