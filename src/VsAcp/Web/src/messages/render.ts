@@ -4,6 +4,9 @@
 // appended as-is. Showdown and highlight.js stay the page-level globals the template already loads.
 
 import DOMPurify from 'dompurify';
+import { h, render as mount } from 'preact';
+import { copyToClipboard } from './clipboard';
+import { CheckIcon, CopyIcon } from './icons';
 
 interface ShowdownConverter {
   makeHtml(text: string): string;
@@ -113,6 +116,44 @@ export function renderMarkdown(text: string): DocumentFragment {
   const fragment = sanitize(html);
   highlightCodeBlocks(fragment);
   return fragment;
+}
+
+/**
+ * Gives each fenced code block of freshly rendered (already sanitized) markdown its own copy button, shown while the
+ * block is hovered. The block is wrapped so the button stays put when a wide block scrolls sideways. Called after
+ * sanitizing: the sanitizer forbids buttons, so the agent can never put one of these in its text. Call it once per
+ * render, on a finished reply: a streaming reply is rebuilt every frame, which would replace a button mid-click.
+ */
+export function addCodeCopyButtons(root: ParentNode): void {
+  for (const pre of Array.from(root.querySelectorAll('pre'))) {
+    const code = pre.querySelector('code');
+    if (!code) continue;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'code-block';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'code-copy-btn';
+    button.title = 'Copy code';
+    button.setAttribute('aria-label', 'Copy code');
+    mount(h(CopyIcon, null), button);
+    let reset: ReturnType<typeof setTimeout> | undefined;
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // the converter ends every block's code with a newline of its own
+      copyToClipboard((code.textContent ?? '').replace(/\r?\n$/, ''));
+      button.classList.add('copied');
+      mount(h(CheckIcon, null), button);
+      clearTimeout(reset);
+      reset = setTimeout(() => {
+        button.classList.remove('copied');
+        mount(h(CopyIcon, null), button);
+      }, 1500);
+    });
+
+    pre.replaceWith(wrap);
+    wrap.append(pre, button);
+  }
 }
 
 /** Host-supplied HTML (a tool body in Html mode): sanitized like markdown output. */

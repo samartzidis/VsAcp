@@ -478,6 +478,25 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         }
     }
 
+    /// <summary>
+    /// "Fork from here" in a chat tab: copies the chat up to <paramref name="messageId"/> into a new chat, opens it in a
+    /// new tab and primes that tab's agent before its first message.
+    /// </summary>
+    internal static async Task ForkChatAsync(ChatSessionViewModel source, string messageId)
+    {
+        if (_instance is not { _sessionListViewModel: { } sessions } package) return;
+
+        await package.JoinableTaskFactory.SwitchToMainThreadAsync();
+        if (await source.ForkAsync(messageId) is not { } fork) return;
+
+        await package.JoinableTaskFactory.SwitchToMainThreadAsync();
+        var session = sessions.OpenForkedSession(fork.Entry);
+        if (package._chatViewModels.TryGetValue(session.Id, out var forked))
+            await forked.ContinueForkAsync(fork);
+        else
+            Log.Warning("[Fork] The tab of forked chat {SessionId} did not open; its agent was not primed", fork.Entry.Id);
+    }
+
     internal static void DisposeSessionProvider(string sessionId)
     {
         if (_instance is null) return;

@@ -30,7 +30,12 @@ public partial class ChatWebView : UserControl
     public event Action<string>? RevertRequested;
 
     /// <summary>
-    /// Raised for page messages other than the chat-message ones above (<c>openFile</c>, <c>revert</c>):
+    /// Raised when the user clicks "Fork from here" on a message of this page, with the message's id.
+    /// </summary>
+    public event Action<string>? ForkRequested;
+
+    /// <summary>
+    /// Raised for page messages other than the chat-message ones above (<c>openFile</c>, <c>revert</c>, <c>fork</c>):
     /// the composer protocol (see Web/src/bridge/protocol.ts). Per instance, so each tab only sees its own page.
     /// </summary>
     public event Action<string, JsonElement>? BridgeMessage;
@@ -222,6 +227,12 @@ public partial class ChatWebView : UserControl
                 var checkpointId = root.GetProperty("checkpointId").GetString();
                 if (!string.IsNullOrEmpty(checkpointId))
                     RevertRequested?.Invoke(checkpointId!);
+            }
+            else if (type == "fork")
+            {
+                var messageId = root.GetProperty("messageId").GetString();
+                if (!string.IsNullOrEmpty(messageId))
+                    ForkRequested?.Invoke(messageId!);
             }
             else if (type == "banner.resolve")
             {

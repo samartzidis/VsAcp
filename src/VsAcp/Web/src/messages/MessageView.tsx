@@ -3,7 +3,7 @@ import { useRef, useState } from 'preact/hooks';
 import { post } from '../bridge/host';
 import type { ChatMessage, MessageStatus } from '../bridge/protocol';
 import { copyToClipboard } from './clipboard';
-import { CheckIcon, CopyIcon, RevertIcon, ToolIcon } from './icons';
+import { CheckIcon, CopyIcon, ForkIcon, RevertIcon, ToolIcon } from './icons';
 import { parseToolTitle, toolIconKind } from './render';
 import { RichContent } from './RichContent';
 import { messageSignal } from './store';
@@ -50,6 +50,23 @@ function CopyButton({ getText }: { getText: () => string }) {
   );
 }
 
+function ForkButton({ messageId }: { messageId: string }) {
+  return (
+    <button
+      type="button"
+      class="msg-action-btn msg-fork-btn"
+      title="Fork from here: continue in a new chat"
+      aria-label="Fork from here"
+      onClick={(e) => {
+        e.stopPropagation();
+        post({ type: 'fork', messageId });
+      }}
+    >
+      <ForkIcon />
+    </button>
+  );
+}
+
 function Chips({ items, glyph = '📄 ' }: { items: { text: string; title?: string }[]; glyph?: string }) {
   return (
     <div class="user-strip">
@@ -81,21 +98,26 @@ function UserMessage({ m }: { m: ChatMessage }) {
         <Chips items={m.selections.map((s) => ({ text: s.label, title: s.tooltip }))} />
       )}
       <RichContent kind="text" text={m.content} class="md-content msg-content user-text" elRef={content} />
-      <CopyButton getText={() => content.current?.innerText ?? ''} />
-      {m.checkpointId && (
-        <button
-          type="button"
-          class="msg-revert-btn"
-          title="Revert to here"
-          aria-label="Revert to here"
-          onClick={(e) => {
-            e.stopPropagation();
-            post({ type: 'revert', checkpointId: m.checkpointId! });
-          }}
-        >
-          <RevertIcon />
-        </button>
-      )}
+      {/* one row with Copy rightmost, as on replies, and Fork between it and Revert: in a one-line bubble a corner
+          Copy sat right above Revert */}
+      <div class="msg-actions">
+        {m.checkpointId && (
+          <button
+            type="button"
+            class="msg-action-btn msg-revert-btn"
+            title="Revert to here"
+            aria-label="Revert to here"
+            onClick={(e) => {
+              e.stopPropagation();
+              post({ type: 'revert', checkpointId: m.checkpointId! });
+            }}
+          >
+            <RevertIcon />
+          </button>
+        )}
+        <ForkButton messageId={m.id} />
+        <CopyButton getText={() => content.current?.innerText ?? ''} />
+      </div>
     </div>
   );
 }
@@ -110,9 +132,14 @@ function AssistantMessage({ m }: { m: ChatMessage }) {
           text={m.content}
           class={m.isStreaming ? 'md-content msg-content streaming-cursor' : 'md-content msg-content'}
           elRef={content}
+          copyCodeBlocks={!m.isStreaming}
         />
       </div>
-      <CopyButton getText={() => content.current?.innerText ?? ''} />
+      {/* its own row under the reply, so the icons never cover text; always there, so a reply does not grow when it ends */}
+      <div class="msg-actions">
+        {!m.isStreaming && <ForkButton messageId={m.id} />}
+        <CopyButton getText={() => content.current?.innerText ?? ''} />
+      </div>
     </div>
   );
 }

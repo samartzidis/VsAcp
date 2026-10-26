@@ -405,6 +405,39 @@ public sealed class ChatSessionController : IDisposable
         return reverted;
     }
 
+    // ---- fork ----
+
+    /// <summary>
+    /// "Fork from here" on the message <paramref name="messageId"/>: copies this chat up to it into a new chat in the
+    /// same store, flushing pending writes first (see <see cref="ForkCoordinator"/>). The caller opens the new chat and
+    /// calls <see cref="PrimeForkedChatAsync"/> on its controller.
+    /// </summary>
+    public async Task<ForkResult> ForkAsync(string messageId)
+    {
+        var store = Store;
+        var sessionId = SessionId;
+        if (store is null || sessionId is null)
+            throw new InvalidOperationException("Forking needs a saved chat.");
+
+        await FlushAsync();
+        return await new ForkCoordinator(_checkpointService, _chatService).ForkAsync(store, sessionId, messageId);
+    }
+
+    /// <summary>
+    /// In the new chat of a fork: gives its agent, with the first message, what it does not have yet. A forked agent
+    /// session already holds the conversation, so only a note that the files were not rolled back; otherwise the
+    /// copied conversation as text.
+    /// </summary>
+    public Task PrimeForkedChatAsync(ForkResult fork)
+    {
+        if (_chatService is null) return Task.CompletedTask;
+        if (!fork.AgentForked)
+            return _chatService.InitializeWithContextAsync(fork.Messages, PriorContextOrigin.Fork);
+
+        _chatService.PrimeForkNote();
+        return Task.CompletedTask;
+    }
+
     // ---- stop ----
 
     /// <summary>

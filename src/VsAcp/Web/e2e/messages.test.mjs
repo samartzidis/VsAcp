@@ -145,6 +145,17 @@ describe('live updates', () => {
     assert.equal(await content.innerText(), 'Hello world');
   });
 
+  test('code blocks of a streaming reply get their copy buttons only once it completes', async () => {
+    await add(msg({ id: 'a1', type: 'Assistant', isStreaming: true }));
+    await deliver({ type: 'messages.content', id: 'a1', content: ['```', 'x = 1', '```'].join(String.fromCharCode(10)) });
+    await rendered('#msg-a1 pre');
+    assert.equal(await msgEl('a1').locator('.code-copy-btn').count(), 0);
+
+    await deliver({ type: 'messages.complete', id: 'a1' });
+    await rendered('#msg-a1 .code-copy-btn');
+    assert.equal(await msgEl('a1').locator('.code-copy-btn').count(), 1);
+  });
+
   test('status and title updates change the tool pill without losing the open body', async () => {
     await add(msg({ id: 's1', type: 'ToolStep', toolName: 'Terminal', status: 'Pending' }));
     await deliver({ type: 'messages.body', id: 's1', body: 'line one', bodyMode: 'PlainText', language: null });
@@ -246,6 +257,24 @@ describe('buttons and links', () => {
     assert.deepEqual(await lastOf('revert'), { type: 'revert', checkpointId: 'cp-7' });
   });
 
+  test('Fork from here is offered on user messages and finished replies, and reports the message', async () => {
+    await load(
+      msg({ id: 'u1', type: 'User', content: 'question', checkpointId: 'cp-7' }),
+      msg({ id: 'a1', type: 'Assistant', content: 'reply' }),
+      msg({ id: 't1', type: 'ToolStep', title: 'Read file' }),
+      msg({ id: 'a2', type: 'Assistant', content: 'still typing', isStreaming: true }),
+    );
+    assert.equal(await page.locator('.msg-fork-btn').count(), 2);
+    assert.equal(await msgEl('u1').locator('.msg-fork-btn').count(), 1);
+    assert.equal(await msgEl('a1').locator('.msg-fork-btn').count(), 1);
+    await msgEl('a1').hover();
+    await msgEl('a1').locator('.msg-fork-btn').click();
+    assert.deepEqual(await lastOf('fork'), { type: 'fork', messageId: 'a1' });
+    await msgEl('u1').hover();
+    await msgEl('u1').locator('.msg-fork-btn').click();
+    assert.deepEqual(await lastOf('fork'), { type: 'fork', messageId: 'u1' });
+  });
+
   test('Copy puts the message text on the clipboard and flashes a confirmation', async () => {
     await page.evaluate(() => {
       window.__copied = [];
@@ -260,6 +289,39 @@ describe('buttons and links', () => {
     await msgEl('a1').locator('.msg-copy-btn').click();
     assert.deepEqual(await page.evaluate(() => window.__copied), ['Copy me']);
     assert.match(await msgEl('a1').locator('.msg-copy-btn').getAttribute('class'), /copied/);
+  });
+
+  test('each fenced code block of a reply has a copy button that copies just that block', async () => {
+    await page.evaluate(() => {
+      window.__copied = [];
+      const original = document.execCommand.bind(document);
+      document.execCommand = (command, ...rest) => {
+        if (command === 'copy') window.__copied.push(document.activeElement?.value);
+        return original(command, ...rest);
+      };
+    });
+    await load(
+      msg({ id: 'a1', type: 'Assistant', content: ['Two blocks:', '', '```js', 'const a = 1;', '```', '', 'text', '', '```', 'plain <b>text</b>', '```'].join(String.fromCharCode(10)) }),
+      msg({ id: 't1', type: 'ToolStep', title: 'Read file', body: ['```', 'inside a tool body', '```'].join(String.fromCharCode(10)) }),
+    );
+    await rendered('#msg-a1 pre');
+    assert.equal(await msgEl('a1').locator('.code-copy-btn').count(), 2);
+    assert.equal(await msgEl('t1').locator('.code-copy-btn').count(), 0);
+    const blocks = msgEl('a1').locator('.code-block');
+    assert.equal(await blocks.nth(0).locator('.code-copy-btn svg').count(), 1);
+    await blocks.nth(1).hover();
+    await blocks.nth(1).locator('.code-copy-btn').click();
+    assert.deepEqual(await page.evaluate(() => window.__copied), ['plain <b>text</b>']);
+    assert.match(await blocks.nth(1).locator('.code-copy-btn').getAttribute('class'), /copied/);
+    await blocks.nth(0).hover();
+    await blocks.nth(0).locator('.code-copy-btn').click();
+    assert.deepEqual(await page.evaluate(() => window.__copied), ['plain <b>text</b>', 'const a = 1;']);
+  });
+
+  test('a code block the agent writes in HTML cannot bring a copy button of its own', async () => {
+    await add(msg({ id: 'x', type: 'Assistant', content: '<button class="code-copy-btn">Copy</button>text' }));
+    await rendered('#msg-x .msg-content');
+    assert.equal(await msgEl('x').locator('.code-copy-btn').count(), 0);
   });
 
   test('copying a tool step includes its name, detail and (when open) its output', async () => {
@@ -412,7 +474,7 @@ describe('untrusted content', () => {
   test('agent-drawn form controls cannot appear in a message', async () => {
     await add(msg({ id: 'f', type: 'Assistant', content: '<button>Allow</button><input type="text"><form><textarea></textarea></form>' }));
     await rendered('#msg-f .msg-content');
-    assert.equal(await msgEl('f').locator('button:not(.msg-copy-btn), input, form, textarea').count(), 0);
+    assert.equal(await msgEl('f').locator('button:not(.msg-copy-btn):not(.msg-action-btn), input, form, textarea').count(), 0);
   });
 
   test('web links in messages open in a new window and cannot reach back', async () => {
