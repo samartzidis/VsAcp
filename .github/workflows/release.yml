@@ -1,12 +1,12 @@
 name: Build, Test & Release
 
-# Two ways in, in whichever repo this file lives (it is mirrored verbatim, see
-# .vscode/Mirror.ps1, so the repo name is never checked):
+# Two ways in (the repo name is never checked):
 #  - "Run workflow": build and test, optionally release by hand.
 #  - A push to main: build, test and, if the Identity Version in
 #    source.extension.vsixmanifest has no release yet (no v<version> tag),
-#    release it automatically, with the version number as the only release
-#    notes.
+#    release it automatically. The release notes are the pushed commit's
+#    message without its subject line: the squash commit of a dev -> main
+#    PR carries them (see the /release command); none = the version number.
 
 on:
   push:
@@ -201,7 +201,8 @@ jobs:
   # Release: create the GitHub Release (tag derived from the version above,
   # created automatically since it doesn't exist yet) and attach the VSIX -
   # only when the check job decided to release. Release notes: the typed
-  # input of a manual run, else just the version number.
+  # input of a manual run, else the pushed commit's message body, else just
+  # the version number.
   # ---------------------------------------------------------------------------
   release:
     needs: [check, pack]
@@ -221,10 +222,32 @@ jobs:
           name: vsix
           path: dist
 
+      # Commit text reaches the script through env, never spliced into it.
+      - name: Release notes
+        id: notes
+        shell: bash
+        env:
+          TYPED: ${{ inputs.release_notes }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          VERSION: ${{ needs.pack.outputs.version }}
+        run: |
+          if [ -n "$TYPED" ]; then
+            NOTES="$TYPED"
+          else
+            # the body: drop the subject line, then the blank lines before the first text
+            NOTES=$(printf '%s\n' "$COMMIT_MESSAGE" | tail -n +2 | sed '/./,$!d')
+          fi
+          [ -n "$NOTES" ] || NOTES="$VERSION"
+          {
+            echo 'notes<<END_OF_RELEASE_NOTES'
+            printf '%s\n' "$NOTES"
+            echo 'END_OF_RELEASE_NOTES'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.TAG }}
           name: Release ${{ env.TAG }}
           files: dist/*
-          body: ${{ inputs.release_notes || needs.pack.outputs.version }}
+          body: ${{ steps.notes.outputs.notes }}

@@ -70,22 +70,6 @@
       }
     },
     {
-      "label": "mirror",
-      "type": "shell",
-      "command": "& '${workspaceFolder}\\.vscode\\Mirror.ps1'",
-      "options": {
-        "shell": {
-          "executable": "pwsh.exe",
-          "args": ["-NoProfile", "-NonInteractive", "-Command"]
-        }
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
       "label": "build",
       "type": "process",
       "command": "dotnet",
