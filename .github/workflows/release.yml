@@ -4,9 +4,10 @@ name: Build, Test & Release
 #  - "Run workflow": build and test, optionally release by hand.
 #  - A push to main: build, test and, if the Identity Version in
 #    source.extension.vsixmanifest has no release yet (no v<version> tag),
-#    release it automatically. The release notes are the pushed commit's
-#    message without its subject line: the squash commit of a dev -> main
-#    PR carries them (see the /release command); none = the version number.
+#    release it automatically. The release notes are the message bodies of
+#    the commits on main since the previous release tag: each squash-merged
+#    dev -> main PR carries its notes there (see the /push-main command), so
+#    pushes that did not release still reach the next release's notes.
 
 on:
   push:
@@ -201,8 +202,8 @@ jobs:
   # Release: create the GitHub Release (tag derived from the version above,
   # created automatically since it doesn't exist yet) and attach the VSIX -
   # only when the check job decided to release. Release notes: the typed
-  # input of a manual run, else the pushed commit's message body, else just
-  # the version number.
+  # input of a manual run, else the message bodies of the commits since the
+  # previous release tag, else just the version number.
   # ---------------------------------------------------------------------------
   release:
     needs: [check, pack]
@@ -222,20 +223,32 @@ jobs:
           name: vsix
           path: dist
 
-      # Commit text reaches the script through env, never spliced into it.
+      # Full history and tags, to find the previous release.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # The typed notes reach the script through env, never spliced into it.
       - name: Release notes
         id: notes
         shell: bash
         env:
           TYPED: ${{ inputs.release_notes }}
-          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
           VERSION: ${{ needs.pack.outputs.version }}
         run: |
           if [ -n "$TYPED" ]; then
             NOTES="$TYPED"
           else
-            # the body: drop the subject line, then the blank lines before the first text
-            NOTES=$(printf '%s\n' "$COMMIT_MESSAGE" | tail -n +2 | sed '/./,$!d')
+            # Bodies (subject lines dropped) of the commits since the previous release tag, oldest
+            # first, blank runs squeezed; without a previous tag, just the latest commit's.
+            PREVIOUS=$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)
+            if [ -n "$PREVIOUS" ]; then
+              BODIES=$(git log --reverse --first-parent --format='%b%n' "$PREVIOUS..HEAD")
+            else
+              BODIES=$(git log -1 --format='%b')
+            fi
+            NOTES=$(printf '%s\n' "$BODIES" | cat -s | sed '/./,$!d')
           fi
           [ -n "$NOTES" ] || NOTES="$VERSION"
           {
