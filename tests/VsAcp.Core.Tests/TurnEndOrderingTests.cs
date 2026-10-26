@@ -106,7 +106,10 @@ public class TurnEndOrderingTests
         public void ClearHistory() { }
         public void ResetSession() { }
         public Task<string?> TryForkSessionAsync(string agentMessageId, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
-        public Task InitializeWithContextAsync(IReadOnlyList<PersistedMessage> messages, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<string?> TryForkSessionForOtherChatAsync(string agentMessageId, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+        public Task InitializeWithContextAsync(IReadOnlyList<PersistedMessage> messages, PriorContextOrigin origin = PriorContextOrigin.Revert,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public void PrimeForkNote() { }
         public void Cancel() { }
         public decimal? GetSessionCost() => null;
         public AcpProtocol.UsageUpdate? Usage => null;

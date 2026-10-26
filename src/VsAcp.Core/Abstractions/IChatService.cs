@@ -38,11 +38,28 @@ public interface IChatService
     Task<string?> TryForkSessionAsync(string agentMessageId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Copies the agent session up to the agent's message <paramref name="agentMessageId"/> into a new session for
+    /// another chat (<c>session/fork</c>), leaving this chat's session as it is, and lets go of the copy here
+    /// (<c>session/close</c> when supported) so the other chat's agent process loads it. Returns the copy's id, or
+    /// null when the agent cannot fork (not advertised, no live session, or the fork failed).
+    /// </summary>
+    Task<string?> TryForkSessionForOtherChatAsync(string agentMessageId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Builds a prior-conversation context block from the given messages and
     /// stores it so it is transparently prepended to the user's next SendMessageAsync
-    /// call. Call after <see cref="ResetSession"/> during a revert the agent could not fork.
+    /// call. Call after <see cref="ResetSession"/> during a revert the agent could not fork, or in a chat forked from
+    /// another one whose agent session could not be forked (<paramref name="origin"/> says which, for what it tells
+    /// the agent about the workspace files).
     /// </summary>
-    Task InitializeWithContextAsync(IReadOnlyList<PersistedMessage> messages, CancellationToken cancellationToken = default);
+    Task InitializeWithContextAsync(IReadOnlyList<PersistedMessage> messages, PriorContextOrigin origin = PriorContextOrigin.Revert,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The agent session was forked from another chat's: tells the agent, with the next message, that the workspace
+    /// files were not rolled back to where the conversation was forked.
+    /// </summary>
+    void PrimeForkNote();
 
     /// <summary>
     /// Sends a cancel notification to the agent for the active session turn.

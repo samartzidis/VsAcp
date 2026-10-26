@@ -67,6 +67,14 @@ public interface ICheckpointService
     Task DeleteCheckpointsAsync(IReadOnlyCollection<string> checkpointIds, CancellationToken ct = default);
 
     /// <summary>
+    /// Gives each of the given checkpoints a second id naming the same snapshot, for a chat forked from another one:
+    /// the shadow repo is shared, so the forked chat's messages need checkpoints the other chat's reverts do not
+    /// delete. A copy keeps its original's time, so it never becomes the latest checkpoint. Returns original id to
+    /// copy id; unknown ids are left out.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, string>> CloneCheckpointsAsync(IReadOnlyCollection<string> checkpointIds, CancellationToken ct = default);
+
+    /// <summary>
     /// Returns the text content of <paramref name="absolutePath"/> as stored in the latest
     /// checkpoint, or <see langword="null"/> if the file was not tracked at checkpoint time
     /// (new file) or no checkpoint exists yet.

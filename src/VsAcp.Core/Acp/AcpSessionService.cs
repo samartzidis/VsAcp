@@ -288,39 +288,8 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
         await _initLock.WaitAsync(cancellationToken);
         try
         {
-            var connection = _connection;
-            var sourceId = _sessionId;
-            if (connection is null || !_connectionReady || !_processHost.IsRunning || sourceId is null || !CanFork)
+            if (await ForkAsync(agentMessageId, cancellationToken) is not (var connection, var sourceId, var response, var additionalDirectories))
                 return null;
-
-            var additionalDirectories = ResolveAdditionalDirectories(_agentCapabilities!);
-            var request = new ForkSessionRequest
-            {
-                SessionId = sourceId,
-                Cwd = _options.Value.WorkingDirectory,
-                McpServers = [],
-                AdditionalDirectories = additionalDirectories,
-                // The fork point: claude-agent-acp reads it from JetBrains AIR's extension, as an agent_message_chunk
-                // messageId, and copies the session up to and including that message. Without it, the whole session.
-                Meta = JsonSerializer.SerializeToElement(new { jetbrains = new { air = new { fork = new { version = 1, messageId = agentMessageId } } } })
-            };
-
-            ForkSessionResponse response;
-            using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
-            {
-                timeout.CancelAfter(_options.Value.NewSessionOnRunningAgentTimeout);
-                try
-                {
-                    _logger.LogInformation("Forking ACP session {SessionId} at message {MessageId}", sourceId, agentMessageId);
-                    response = await connection.ForkSessionAsync(request, timeout.Token);
-                }
-                catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
-                {
-                    // E.g. the message is from an earlier agent session (before a revert the agent could not fork).
-                    _logger.LogWarning("session/fork of {SessionId} at {MessageId} failed: {Error}", sourceId, agentMessageId, ex.Message);
-                    return null;
-                }
-            }
 
             _sessionUpdateAdapter.IgnoreSession(sourceId);
             if (_agentCapabilities?.SessionCapabilities?.Close is not null)
@@ -340,6 +309,65 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
         }
     }
 
+    public async Task<string?> TryForkSessionForOtherChatAsync(string agentMessageId, CancellationToken cancellationToken = default)
+    {
+        await _initLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (await ForkAsync(agentMessageId, cancellationToken) is not (var connection, var sourceId, var response, _))
+                return null;
+
+            // The copy belongs to the other chat: nothing it sends here is shown, and once it is closed the other
+            // chat's agent process is the only one holding it (awaited, so that one loads it after the close).
+            var forkId = response.SessionId;
+            _sessionUpdateAdapter.IgnoreSession(forkId);
+            if (_agentCapabilities?.SessionCapabilities?.Close is not null)
+                await CloseSessionAsync(connection, forkId);
+            _logger.LogInformation("ACP session {SessionId} forked from {SourceId} for another chat", forkId, sourceId);
+            return forkId;
+        }
+        finally
+        {
+            _initLock.Release();
+        }
+    }
+
+    // session/fork of the current session, behind _initLock. Null when the agent cannot fork or the fork failed.
+    async Task<(ClientSideConnection Connection, string SourceId, ForkSessionResponse Response, string[]? AdditionalDirectories)?> ForkAsync(
+        string agentMessageId, CancellationToken cancellationToken)
+    {
+        var connection = _connection;
+        var sourceId = _sessionId;
+        if (connection is null || !_connectionReady || !_processHost.IsRunning || sourceId is null || !CanFork)
+            return null;
+
+        var additionalDirectories = ResolveAdditionalDirectories(_agentCapabilities!);
+        var request = new ForkSessionRequest
+        {
+            SessionId = sourceId,
+            Cwd = _options.Value.WorkingDirectory,
+            McpServers = [],
+            AdditionalDirectories = additionalDirectories,
+            // The fork point: claude-agent-acp reads it from JetBrains AIR's extension, as an agent_message_chunk
+            // messageId, and copies the session up to and including that message. Without it, the whole session.
+            Meta = JsonSerializer.SerializeToElement(new { jetbrains = new { air = new { fork = new { version = 1, messageId = agentMessageId } } } })
+        };
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_options.Value.NewSessionOnRunningAgentTimeout);
+        try
+        {
+            _logger.LogInformation("Forking ACP session {SessionId} at message {MessageId}", sourceId, agentMessageId);
+            return (connection, sourceId, await connection.ForkSessionAsync(request, timeout.Token), additionalDirectories);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // E.g. the message is from an earlier agent session (before a revert the agent could not fork).
+            _logger.LogWarning("session/fork of {SessionId} at {MessageId} failed: {Error}", sourceId, agentMessageId, ex.Message);
+            return null;
+        }
+    }
+
     void ForgetSession()
     {
         _sessionId = null;
@@ -354,7 +382,15 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
         }
     }
 
-    public Task InitializeWithContextAsync(IReadOnlyList<PersistedMessage> messages, CancellationToken cancellationToken = default)
+    public void PrimeForkNote()
+    {
+        _pendingContextPrefix = "[This conversation was forked from another chat at this point. The workspace files were not rolled back with it: they are as the other chat and I have left them, so they may differ from what earlier messages describe. Read a file again before relying on what an earlier message says about it.]"
+            + Environment.NewLine + Environment.NewLine + "My next request:" + Environment.NewLine;
+        _logger.LogInformation("PrimeForkNote: primed the forked-chat note");
+    }
+
+    public Task InitializeWithContextAsync(IReadOnlyList<PersistedMessage> messages, PriorContextOrigin origin = PriorContextOrigin.Revert,
+        CancellationToken cancellationToken = default)
     {
         if (messages.Count == 0)
         {
@@ -363,7 +399,9 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
         }
 
         var sb = new StringBuilder();
-        sb.AppendLine("[Continuing from a prior conversation in this same chat. Everything below - my messages, your responses, your tool calls and their results, and your reasoning - already happened between us before this point. The workspace files have been restored to the state they were in at this point in the conversation, so any file edits you previously made and that are referenced below have been UNDONE on disk. Treat this block as our established shared memory: do not re-execute any actions or repeat file edits described below. After this prior-context block, my actual next request follows.]");
+        sb.AppendLine(origin == PriorContextOrigin.Fork
+            ? "[Continuing a conversation forked from another chat. Everything below - my messages, your responses, your tool calls and their results, and your reasoning - already happened between us before this point. The workspace files were NOT rolled back to this point: they are as the other chat and I have left them, so they may differ from what is described below; read a file again before relying on it. Treat this block as our established shared memory: do not re-execute any actions or repeat file edits described below. After this prior-context block, my actual next request follows.]"
+            : "[Continuing from a prior conversation in this same chat. Everything below - my messages, your responses, your tool calls and their results, and your reasoning - already happened between us before this point. The workspace files have been restored to the state they were in at this point in the conversation, so any file edits you previously made and that are referenced below have been UNDONE on disk. Treat this block as our established shared memory: do not re-execute any actions or repeat file edits described below. After this prior-context block, my actual next request follows.]");
         sb.AppendLine();
         sb.AppendLine("<prior_conversation_context>");
 

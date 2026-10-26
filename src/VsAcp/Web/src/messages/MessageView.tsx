@@ -3,7 +3,7 @@ import { useRef, useState } from 'preact/hooks';
 import { post } from '../bridge/host';
 import type { ChatMessage, MessageStatus } from '../bridge/protocol';
 import { copyToClipboard } from './clipboard';
-import { CheckIcon, CopyIcon, RevertIcon, ToolIcon } from './icons';
+import { CheckIcon, CopyIcon, ForkIcon, RevertIcon, ToolIcon } from './icons';
 import { parseToolTitle, toolIconKind } from './render';
 import { RichContent } from './RichContent';
 import { messageSignal } from './store';
@@ -50,6 +50,23 @@ function CopyButton({ getText }: { getText: () => string }) {
   );
 }
 
+function ForkButton({ messageId }: { messageId: string }) {
+  return (
+    <button
+      type="button"
+      class="msg-action-btn msg-fork-btn"
+      title="Fork from here: continue in a new chat"
+      aria-label="Fork from here"
+      onClick={(e) => {
+        e.stopPropagation();
+        post({ type: 'fork', messageId });
+      }}
+    >
+      <ForkIcon />
+    </button>
+  );
+}
+
 function Chips({ items, glyph = '📄 ' }: { items: { text: string; title?: string }[]; glyph?: string }) {
   return (
     <div class="user-strip">
@@ -82,20 +99,23 @@ function UserMessage({ m }: { m: ChatMessage }) {
       )}
       <RichContent kind="text" text={m.content} class="md-content msg-content user-text" elRef={content} />
       <CopyButton getText={() => content.current?.innerText ?? ''} />
-      {m.checkpointId && (
-        <button
-          type="button"
-          class="msg-revert-btn"
-          title="Revert to here"
-          aria-label="Revert to here"
-          onClick={(e) => {
-            e.stopPropagation();
-            post({ type: 'revert', checkpointId: m.checkpointId! });
-          }}
-        >
-          <RevertIcon />
-        </button>
-      )}
+      <div class="msg-actions">
+        <ForkButton messageId={m.id} />
+        {m.checkpointId && (
+          <button
+            type="button"
+            class="msg-action-btn msg-revert-btn"
+            title="Revert to here"
+            aria-label="Revert to here"
+            onClick={(e) => {
+              e.stopPropagation();
+              post({ type: 'revert', checkpointId: m.checkpointId! });
+            }}
+          >
+            <RevertIcon />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -113,6 +133,11 @@ function AssistantMessage({ m }: { m: ChatMessage }) {
         />
       </div>
       <CopyButton getText={() => content.current?.innerText ?? ''} />
+      {!m.isStreaming && (
+        <div class="msg-actions">
+          <ForkButton messageId={m.id} />
+        </div>
+      )}
     </div>
   );
 }

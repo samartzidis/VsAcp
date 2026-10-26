@@ -81,6 +81,9 @@ public sealed class ShadowGitCheckpointService : ICheckpointService
     public Task DeleteCheckpointsAsync(IReadOnlyCollection<string> checkpointIds, CancellationToken ct = default)
         => Task.Run(() => DeleteCheckpointsCore(checkpointIds), ct);
 
+    public Task<IReadOnlyDictionary<string, string>> CloneCheckpointsAsync(IReadOnlyCollection<string> checkpointIds, CancellationToken ct = default)
+        => Task.Run(() => CloneCheckpointsCore(checkpointIds), ct);
+
     public string? GetFileAtLatestCheckpoint(string absolutePath)
     {
         if (_shadowRepoPath is null) return null;
@@ -519,6 +522,28 @@ public sealed class ShadowGitCheckpointService : ICheckpointService
             repo.Refs.Remove(name);
             _logger.LogDebug("[Checkpoint] Deleted {Ref}", name);
         }
+    }
+
+    private IReadOnlyDictionary<string, string> CloneCheckpointsCore(IReadOnlyCollection<string> checkpointIds)
+    {
+        var copies = new Dictionary<string, string>();
+        if (_shadowRepoPath is null || checkpointIds.Count == 0 || !Repository.IsValid(_shadowRepoPath)) return copies;
+
+        using var repo = new Repository(_shadowRepoPath);
+
+        foreach (var id in checkpointIds.Distinct())
+        {
+            if (repo.Refs[RefPrefix + id] is not { } reference) continue;
+
+            // The latest checkpoint is the last ref by name, and a name starts with its time ("yyyyMMddTHHmmssZ"):
+            // the copy keeps that prefix, so it sorts beside its original instead of becoming the newest.
+            var copyId = $"{id.Substring(0, Math.Min(id.Length, 16))}-{Guid.NewGuid():N}"[..32];
+            repo.Refs.Add(RefPrefix + copyId, new ObjectId(reference.TargetIdentifier));
+            copies[id] = copyId;
+        }
+
+        _logger.LogInformation("[Checkpoint] Copied {Count} of {Requested} checkpoint(s)", copies.Count, checkpointIds.Count);
+        return copies;
     }
 
     // -------------------------------------------------------------------------

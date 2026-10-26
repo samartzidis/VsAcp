@@ -68,10 +68,22 @@
     padding: 8px;
     position: relative;
 }
-.msg-revert-btn {
+/* Hover actions at the bottom right of a message: Fork from here, and Revert to here on user messages */
+.msg-actions {
     position: absolute;
     bottom: 2px;
     right: 2px;
+    display: flex;
+    gap: 2px;
+    z-index: 10;
+}
+/* A reply can be one line high: its actions sit beside the copy button instead of under it */
+.msg-assistant .msg-actions {
+    top: 2px;
+    bottom: auto;
+    right: 22px;
+}
+.msg-action-btn {
     background: transparent;
     border: none;
     border-radius: 2px;
@@ -87,10 +99,11 @@
     font-size: 13px;
     line-height: 1;
 }
-.msg:hover .msg-revert-btn {
+.msg:hover .msg-action-btn {
     opacity: 0.7;
 }
-.msg-revert-btn:hover {
+.msg-action-btn:hover,
+.msg-action-btn:focus-visible {
     opacity: 1;
     color: var(--link-text);
 }

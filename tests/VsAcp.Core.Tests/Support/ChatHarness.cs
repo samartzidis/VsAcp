@@ -97,8 +97,11 @@ public sealed class ChatHarness : IDisposable
     /// </summary>
     /// <param name="uiThread">Runs turns and applies agent output on a simulated UI thread, so the ordering of
     /// queued updates against the end of the turn can be exercised (default: a lock, everything in order).</param>
+    /// <param name="sessionId">A chat already in the store to be this tab's (default: a new one). With
+    /// <c>configure</c> pointing <see cref="VsAcpOptions.WorkingDirectory"/> at another harness's
+    /// <see cref="Workspace"/>, a second tab on the same workspace and store.</param>
     public static async Task<ChatHarness> CreateAsync(object? scenario = null, Action<VsAcpOptions>? configure = null,
-        SimulatedUiThread? uiThread = null)
+        SimulatedUiThread? uiThread = null, string? sessionId = null)
     {
         // The workspace is snapshotted and restored, so the agent's scenario and log live beside it.
         var dir = new TempDirectory("workspace");
@@ -139,7 +142,9 @@ public sealed class ChatHarness : IDisposable
         {
             var store = provider.GetRequiredService<ISessionStore>();
             await store.EnsureWorkspaceAsync();
-            var entry = await store.CreateSessionAsync("test");
+            var entry = sessionId is null
+                ? await store.CreateSessionAsync("test")
+                : (await store.GetSessionIndexAsync()).Single(e => e.Id == sessionId);
             return new ChatHarness(dir, provider, session, gate, entry, log, listener, uiThread) { AgentLogPath = logPath };
         }
         catch
@@ -220,6 +225,17 @@ public sealed class ChatHarness : IDisposable
     {
         lock (_gate)
             return _session.Messages.Where(m => m.Type == ChatItemType.User).ElementAt(userMessageIndex).CheckpointId!;
+    }
+
+    /// <summary>
+    /// What a tab opening a saved chat does (<c>ChatSessionViewModel.EnablePersistence</c>): loads the transcript
+    /// from the store and takes the agent session the store holds for the chat, to resume at the first send.
+    /// </summary>
+    public async Task OpenStoredChatAsync()
+    {
+        await _controller.RestoreAsync();
+        if (await _controller.ReadAcpSessionIdAsync() is { } acpSessionId)
+            Service.RestoreHistory(acpSessionId);
     }
 
     /// <summary>Waits until everything queued for persistence so far has been written.</summary>

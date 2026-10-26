@@ -632,6 +632,8 @@ public sealed class ToolCallAdapterTests : IDisposable
         public Task<RestorePreview> PreviewRestoreAsync(string checkpointId, IReadOnlyCollection<string>? onlyPaths = null, CancellationToken ct = default) =>
             Task.FromResult(new RestorePreview { Modified = [], Recreated = [], Deleted = [] });
         public Task DeleteCheckpointsAsync(IReadOnlyCollection<string> checkpointIds, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<IReadOnlyDictionary<string, string>> CloneCheckpointsAsync(IReadOnlyCollection<string> checkpointIds, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>());
     }
 
     private sealed class Listener : IOutputListener

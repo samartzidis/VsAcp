@@ -262,7 +262,7 @@ export type HostMessage =
   /** Like load, but the page acknowledges with `messages.synced` so the host knows the view converged. */
   | { type: 'messages.sync'; syncId: string; messages: ChatMessage[] };
 
-/** Page -> host. `openFile` and `revert` (chat messages) are handled by ChatWebView directly. */
+/** Page -> host. `openFile`, `revert` and `fork` (chat messages) are handled by ChatWebView directly. */
 export type WebMessage =
   | { type: 'ready' }
   | { type: 'composer.changed'; text: string; commandName: string | null }
@@ -294,7 +294,9 @@ export type WebMessage =
   /** A file path link was clicked in rendered content (path may carry a :line suffix). */
   | { type: 'openFile'; path: string }
   /** "Revert to here" on a user message. */
-  | { type: 'revert'; checkpointId: string };
+  | { type: 'revert'; checkpointId: string }
+  /** "Fork from here" on a user message or a reply: a new chat continues from there. */
+  | { type: 'fork'; messageId: string };
 
 export const emptyComposerState: ComposerState = {
   enabled: false,

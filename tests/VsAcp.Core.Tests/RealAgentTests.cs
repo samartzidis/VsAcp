@@ -104,4 +104,56 @@ public class RealAgentTests
         Assert.Single(h.Log.Lines, l => l.Contains("Starting agent process"));
         Assert.DoesNotContain("(fork)", entry.Title);
     }
+
+    [RealAgentFact]
+    public async Task A_fork_made_in_one_tabs_agent_process_loads_in_another_tabs_process_and_leaves_the_source_intact()
+    {
+        using var a = await ChatHarness.CreateAsync(configure: ClaudeAgentAcp);
+
+        await TimedSendAsync(a, "Remember the word pelican. Do not use any tools. Reply with just: OK");
+        var pelicanReply = a.Messages.Last(m => m.Type == ChatItemType.Assistant).AgentMessageId;
+        Assert.False(string.IsNullOrEmpty(pelicanReply));
+        await TimedSendAsync(a, "Now remember the word walrus instead. Do not use any tools. Reply with just: OK");
+        var source = a.Service.SerializeHistory();
+
+        // What a fork button would do in tab A's process: fork at the pelican reply, then let go of the fork
+        // (session/close) so only the new tab's process holds it. Today's fork also closes the source; tab A
+        // reloads it at the end.
+        var fork = await a.Service.TryForkSessionAsync(pelicanReply!);
+        Assert.NotNull(fork);
+        a.Service.ResetSession();
+
+        // Tab B: a new chat on the same workspace and store with its own agent process, resuming the fork from the
+        // store the way a tab opens (ADR-055) while tab A's process is still alive.
+        using var b = await ChatHarness.CreateAsync(configure: o =>
+        {
+            ClaudeAgentAcp(o);
+            o.WorkingDirectory = a.Workspace;
+        });
+        var entry = await b.IndexEntryAsync();
+        entry.AcpSessionId = fork;
+        await b.Store.UpdateSessionAsync(entry);
+        b.Service.RestoreHistory((await b.Controller.ReadAcpSessionIdAsync())!);
+        await TimedSendAsync(b, "Which word did I ask you to remember? Do not use any tools. Reply with just that word.");
+
+        _output.WriteLine($"source {source}, fork {fork}");
+        Assert.Contains("pelican", LastAnswer(b), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("walrus", LastAnswer(b), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(b.Log.Lines, l => l.Contains("LoadSession END") && l.Contains(fork!));
+        Assert.DoesNotContain(b.Log.Lines, l => l.Contains("LoadSession failed"));
+        Assert.Single(a.Log.Lines, l => l.Contains("Starting agent process"));
+
+        // The fork did not change the source: it still knows the later turn. Tab A's adapter ignores the source's
+        // updates since today's fork closed it, so a third tab reloads it.
+        using var c = await ChatHarness.CreateAsync(configure: o =>
+        {
+            ClaudeAgentAcp(o);
+            o.WorkingDirectory = a.Workspace;
+        });
+        c.Service.RestoreHistory(source);
+        await TimedSendAsync(c, "Which word did I ask you to remember? Do not use any tools. Reply with just that word.");
+
+        Assert.Contains("walrus", LastAnswer(c), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(c.Log.Lines, l => l.Contains("LoadSession END") && l.Contains(source));
+    }
 }

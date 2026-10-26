@@ -246,6 +246,24 @@ describe('buttons and links', () => {
     assert.deepEqual(await lastOf('revert'), { type: 'revert', checkpointId: 'cp-7' });
   });
 
+  test('Fork from here is offered on user messages and finished replies, and reports the message', async () => {
+    await load(
+      msg({ id: 'u1', type: 'User', content: 'question', checkpointId: 'cp-7' }),
+      msg({ id: 'a1', type: 'Assistant', content: 'reply' }),
+      msg({ id: 't1', type: 'ToolStep', title: 'Read file' }),
+      msg({ id: 'a2', type: 'Assistant', content: 'still typing', isStreaming: true }),
+    );
+    assert.equal(await page.locator('.msg-fork-btn').count(), 2);
+    assert.equal(await msgEl('u1').locator('.msg-fork-btn').count(), 1);
+    assert.equal(await msgEl('a1').locator('.msg-fork-btn').count(), 1);
+    await msgEl('a1').hover();
+    await msgEl('a1').locator('.msg-fork-btn').click();
+    assert.deepEqual(await lastOf('fork'), { type: 'fork', messageId: 'a1' });
+    await msgEl('u1').hover();
+    await msgEl('u1').locator('.msg-fork-btn').click();
+    assert.deepEqual(await lastOf('fork'), { type: 'fork', messageId: 'u1' });
+  });
+
   test('Copy puts the message text on the clipboard and flashes a confirmation', async () => {
     await page.evaluate(() => {
       window.__copied = [];
@@ -412,7 +430,7 @@ describe('untrusted content', () => {
   test('agent-drawn form controls cannot appear in a message', async () => {
     await add(msg({ id: 'f', type: 'Assistant', content: '<button>Allow</button><input type="text"><form><textarea></textarea></form>' }));
     await rendered('#msg-f .msg-content');
-    assert.equal(await msgEl('f').locator('button:not(.msg-copy-btn), input, form, textarea').count(), 0);
+    assert.equal(await msgEl('f').locator('button:not(.msg-copy-btn):not(.msg-action-btn), input, form, textarea').count(), 0);
   });
 
   test('web links in messages open in a new window and cannot reach back', async () => {

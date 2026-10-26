@@ -640,6 +640,49 @@ public partial class ChatSessionViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// "Fork from here" on the message <paramref name="messageId"/>: copies this chat up to it into a new chat in the
+    /// store (see <see cref="ForkCoordinator"/>), for the host to open. Null when ignored (a turn or a revert
+    /// confirmation is running) or when it failed, which adds a notice to this chat.
+    /// </summary>
+    public async Task<ForkResult?> ForkAsync(string messageId)
+    {
+        if (IsBusy || IsRevertConfirmPending)
+        {
+            Serilog.Log.Information("[Fork] Ignored fork request for {Id}: busy={Busy} confirmPending={Pending}",
+                messageId, IsBusy, IsRevertConfirmPending);
+            return null;
+        }
+
+        // No turn may start while the agent copies its session.
+        IsBusy = true;
+        try
+        {
+            return await _controller.ForkAsync(messageId);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[Fork] ForkAsync failed for message {Id}", messageId);
+            _controller.AddNotice(NextElementId("err"), $"**Could not fork the chat:** {ex.Message}");
+            return null;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// In the new chat of a fork, right after its tab opened: primes what its agent gets with the first message and,
+    /// when forked from a user message, puts that message back into the input.
+    /// </summary>
+    public async Task ContinueForkAsync(ForkResult fork)
+    {
+        await _controller.PrimeForkedChatAsync(fork);
+        if (fork.Draft is { } draft)
+            Dispatch(() => RestoreInputFromReverted(draft));
+    }
+
+    /// <summary>
     /// Repopulates the input with a reverted user message so it can be resubmitted or edited: the text
     /// goes into <see cref="InputText"/> and any dropped file attachments (that still exist on disk) are
     /// re-added as pending files.

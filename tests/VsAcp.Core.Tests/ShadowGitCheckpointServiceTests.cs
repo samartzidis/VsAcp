@@ -210,6 +210,32 @@ public sealed class ShadowGitCheckpointServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_copied_checkpoint_outlives_its_original_and_never_becomes_the_latest()
+    {
+        var service = NewService();
+        _dir.Write("a.txt", "one");
+        var first = await SnapshotAsync(service);
+        _dir.Write("a.txt", "two");
+        await SnapshotAsync(service);
+
+        var copies = await service.CloneCheckpointsAsync(new[] { first, "20200101T000000Z-unknown" });
+
+        var copy = Assert.Single(copies).Value;
+        Assert.Equal(first, Assert.Single(copies).Key);
+        Assert.NotEqual(first, copy);
+        Assert.Equal(first.Substring(0, 16), copy.Substring(0, 16));
+        // Still the second snapshot: the inline diff and the next incremental snapshot build on the latest one.
+        Assert.Equal("two", service.GetFileAtLatestCheckpoint(_dir.Combine("a.txt")));
+
+        await service.DeleteCheckpointsAsync(new[] { first });
+        _dir.Write("a.txt", "three");
+        await service.RestoreAsync(copy);
+
+        Assert.Equal("one", _dir.Read("a.txt"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.RestoreAsync(first));
+    }
+
+    [Fact]
     public async Task Two_tabs_on_one_workspace_keep_each_others_restore_points()
     {
         // Chat tabs of a workspace share one shadow repo; a revert in one must not touch the other's checkpoints.

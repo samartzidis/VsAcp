@@ -129,6 +129,24 @@ public partial class SessionListViewModel : ObservableObject
         SessionOpenRequested?.Invoke(session);
     }
 
+    /// <summary>Adds a chat another one was just forked into (already in the store) and opens its tab.</summary>
+    public SessionInfo OpenForkedSession(SessionEntry entry)
+    {
+        var session = new SessionInfo
+        {
+            PersistedId = entry.Id,
+            AgentCommand = entry.AgentCommand,
+            AgentArgs = entry.AgentArgs,
+            Name = entry.Title,
+            IsActive = true
+        };
+
+        Sessions.Add(session);
+        SelectedSession = session;
+        SessionOpenRequested?.Invoke(session);
+        return session;
+    }
+
     [RelayCommand]
     private void OpenSession(SessionInfo? session)
     {

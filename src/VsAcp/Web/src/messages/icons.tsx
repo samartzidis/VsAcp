@@ -66,6 +66,17 @@ export const CheckIcon = () => (
   </svg>
 );
 
+/** A branch leaving a line: "Fork from here". */
+export const ForkIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" {...line} stroke-width="1.5" aria-hidden="true">
+    <circle cx="4.5" cy="3" r="1.5" />
+    <circle cx="4.5" cy="13" r="1.5" />
+    <circle cx="11.5" cy="5" r="1.5" />
+    <path d="M4.5 4.5v7" />
+    <path d="M11.5 6.5c0 3-7 2.5-7 5" />
+  </svg>
+);
+
 export const RevertIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" {...line} stroke-width="1.5" aria-hidden="true">
     <path d="M2.5 8a5.5 5.5 0 1 0 1.1-3.3" />

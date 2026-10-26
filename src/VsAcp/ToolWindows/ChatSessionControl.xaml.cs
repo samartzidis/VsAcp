@@ -20,6 +20,7 @@ public partial class ChatSessionControl : UserControl
 {
     private ChatSessionViewModel? _viewModel;
     private Action<string>? _revertHandler;
+    private Action<string>? _forkHandler;
     private TaskCompletionSource<bool?>? _pendingRevertConfirm;
     private ChatSessionProjector? _projector;
     private ComposerBridge? _composer;
@@ -38,6 +39,11 @@ public partial class ChatSessionControl : UserControl
         {
             ChatWebView.RevertRequested -= _revertHandler;
             _revertHandler = null;
+        }
+        if (_forkHandler is not null)
+        {
+            ChatWebView.ForkRequested -= _forkHandler;
+            _forkHandler = null;
         }
         // Tab going away with the confirmation open: treat as Cancel so the waiting task completes.
         _pendingRevertConfirm?.TrySetResult(null);
@@ -138,6 +144,10 @@ public partial class ChatSessionControl : UserControl
             });
         };
         ChatWebView.RevertRequested += _revertHandler;
+
+        // "Fork from here": a new tab continues the conversation from that message
+        _forkHandler = messageId => UiThread.Post("Fork", () => VsAcpPackage.ForkChatAsync(viewModel, messageId));
+        ChatWebView.ForkRequested += _forkHandler;
 
         // Composer (input box, chips, toolbar, status bars) lives in the page; the bridge mirrors the
         // view model into it and turns its messages into view-model calls.
