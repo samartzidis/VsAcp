@@ -58,6 +58,9 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
     private uint _solutionEventsCookie;
     private uint _selectionEventsCookie;
     private IVsOutputWindowPane? _outputPane;
+    // Read by the log pipeline on any thread, written on the UI thread by ApplySettings.
+    // Starts on, like the setting's default, so startup lines before the first settings read are kept.
+    private static volatile bool _fileLoggingEnabled = true;
 
     public static bool IsLoaded => _instance is not null;
 
@@ -162,8 +165,28 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         var resolved = VsAcpSettings.Read(_unifiedSettings?.GetReader());
         _agentSettings = resolved;
         Controls.ChatWebView.DevToolsEnabled = resolved.EnableChatDevTools;
-        Log.Information("[Settings] Preset='{Preset}', AgentCommand='{Cmd}', AgentArguments='{Args}', DevTools={DevTools}",
-            resolved.Preset, resolved.AgentCommand, resolved.AgentArguments, resolved.EnableChatDevTools);
+        _fileLoggingEnabled = resolved.EnableFileLogging;
+        Log.Information("[Settings] Preset='{Preset}', AgentCommand='{Cmd}', AgentArguments='{Args}', DevTools={DevTools}, FileLogging={FileLogging}",
+            resolved.Preset, resolved.AgentCommand, resolved.AgentArguments, resolved.EnableChatDevTools, resolved.EnableFileLogging);
+    }
+
+    /// <summary>
+    /// Opens Tools &gt; Options on the ACP Agent page: the Unified Settings UI takes the category moniker
+    /// (<c>acpAgent</c>) as the command argument (verified in VS 2026).
+    /// </summary>
+    internal static void OpenSettings()
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        if (_instance?.GetService(typeof(SVsUIShell)) is not IVsUIShell shell)
+        {
+            Log.Warning("[Settings] Open: IVsUIShell unavailable");
+            return;
+        }
+
+        var group = Microsoft.VisualStudio.VSConstants.GUID_VSStandardCommandSet97;
+        object arg = "acpAgent";
+        var hr = shell.PostExecCommand(ref group, (uint)Microsoft.VisualStudio.VSConstants.VSStd97CmdID.ToolsOptions, 0, ref arg);
+        Log.Information("[Settings] Open: PostExecCommand(ToolsOptions, '{Arg}') hr=0x{Hr:X8}", arg, hr);
     }
 
     private ChatSessionViewModel CreateChatViewModel(
@@ -359,8 +382,9 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
             .MinimumLevel.Verbose()
             .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
             .MinimumLevel.Override("System", Serilog.Events.LogEventLevel.Warning)
-            .WriteTo.File(logPath, rollingInterval: Serilog.RollingInterval.Day,
-                outputTemplate: outputTemplate);
+            // On until the setting says otherwise (ApplySettings); the rolling sink creates its file on the first event.
+            .WriteTo.Conditional(_ => _fileLoggingEnabled, sink => sink.File(logPath,
+                rollingInterval: Serilog.RollingInterval.Day, outputTemplate: outputTemplate));
 
         if (outputPane is not null)
             logConfig = logConfig.WriteTo.Sink(new VsOutputWindowSink(outputPane, new MessageTemplateTextFormatter(outputTemplate)));

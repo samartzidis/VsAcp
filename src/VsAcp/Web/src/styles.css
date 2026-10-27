@@ -584,11 +584,28 @@
 /* a slim row under the composer box: the folders are shared by the whole solution, not by one message */
 .composer-footer {
   display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 4px 2px 0;
 }
 
 .folders-btn {
   margin-left: 0;
+}
+
+/* first in the footer row, just left of the folders chip */
+.settings-btn {
+  margin-left: 0;
+  color: var(--text-muted);
+}
+
+.settings-btn:hover {
+  color: var(--text-primary);
+}
+
+.settings-btn:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 1px;
 }
 
 .folders-count {
