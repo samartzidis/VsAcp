@@ -521,6 +521,27 @@ describe('shared folders chip', () => {
   });
 });
 
+describe('pressing a bare part of the composer box', () => {
+  test('puts the focus in the input', async () => {
+    await editor().click();
+    await page.keyboard.type('hello');
+    await page.mouse.click(5, 5); // the message list: the input loses the focus
+    assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('editor') ?? false), false);
+
+    // the toolbar's bottom padding, below the text area
+    const box = await page.locator('.composer-box').boundingBox();
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height - 3;
+    assert.equal(await page.evaluate(([px, py]) => document.elementFromPoint(px, py)?.closest('button, .editor') ?? null, [x, y]), null);
+    await page.mouse.click(x, y);
+    assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('editor') ?? false), true);
+
+    await page.keyboard.type('!');
+    assert.match((await lastOf('composer.changed')).text, /hello/);
+    assert.match((await lastOf('composer.changed')).text, /!/);
+  });
+});
+
 describe('dropping folders on the folders chip', () => {
   const state = (over = {}) => ({
     items: [{ path: 'C:\\libs\\shared', displayName: 'shared', source: 'auto' }],

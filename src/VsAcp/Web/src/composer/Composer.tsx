@@ -10,6 +10,10 @@ import { CogIcon } from './icons';
 import { SlashPopup } from './SlashPopup';
 import { Toolbar } from './Toolbar';
 
+/** Parts of the composer box a press must reach unchanged (see `onBoxMouseDown`). */
+const OWN_POINTER_HANDLING =
+  '.editor, button, a, input, select, textarea, label, [tabindex], [role="listbox"], [role="option"], [role="dialog"]';
+
 export function Composer() {
   const s = composer.value;
   const rootRef = useRef<HTMLDivElement>(null);
@@ -129,12 +133,21 @@ export function Composer() {
     post({ type: 'composer.paste', text, hasImage });
   };
 
+  // A press on a bare part of the box (its padding, the toolbar's empty space) is a click into the input, as it looks:
+  // otherwise the browser moves the focus to the page body and the caret disappears. Controls, popups and the text
+  // itself keep their own behaviour.
+  const onBoxMouseDown = (e: MouseEvent) => {
+    if (!(e.target instanceof Element) || e.target.closest(OWN_POINTER_HANDLING) || !composer.peek().enabled) return;
+    e.preventDefault();
+    ctrlRef.current?.focus();
+  };
+
   const matches = liveMatches();
   const selected = Math.min(indexRef.current, Math.max(0, matches.length - 1));
 
   return (
     <div class="composer">
-      <div class="composer-box">
+      <div class="composer-box" onMouseDown={onBoxMouseDown}>
         {matches.length > 0 && <SlashPopup commands={matches} selected={selected} onPick={acceptCommand} />}
         <Attachments />
         <div class="editor-wrap">
