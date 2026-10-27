@@ -279,6 +279,8 @@ export type WebMessage =
   | { type: 'composer.toggleActiveContext' }
   /** Opens the host's folder picker and shares the chosen folder with the agent. */
   | { type: 'folders.add' }
+  /** Opens Tools > Options at the ACP Agent settings page. */
+  | { type: 'settings.open' }
   | { type: 'folders.remove'; path: string }
   /** Items dropped on the folders chip; the host reads their paths (WebView2 additional objects) and adds the folders among them. */
   | { type: 'folders.drop' }

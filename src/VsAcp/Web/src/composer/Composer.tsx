@@ -6,6 +6,7 @@ import { Attachments } from './Attachments';
 import { EditorController } from './editorDom';
 import { filterCommands, moveIndex } from './editorModel';
 import { FoldersMenu } from './FoldersMenu';
+import { CogIcon } from './icons';
 import { SlashPopup } from './SlashPopup';
 import { Toolbar } from './Toolbar';
 
@@ -152,12 +153,19 @@ export function Composer() {
         </div>
         <Toolbar />
       </div>
-      {/* Outside the box on purpose: the shared folders belong to the whole solution, not to this message. */}
-      {s.folders && (
-        <div class="composer-footer">
-          <FoldersMenu folders={s.folders} />
-        </div>
-      )}
+      {/* Outside the box on purpose: the shared folders and the settings belong to the whole solution, not to this message. */}
+      <div class="composer-footer">
+        <button
+          type="button"
+          class="ctx-btn settings-btn"
+          title="Open the ACP Agent settings"
+          aria-label="Open the ACP Agent settings"
+          onClick={() => post({ type: 'settings.open' })}
+        >
+          <CogIcon />
+        </button>
+        {s.folders && <FoldersMenu folders={s.folders} />}
+      </div>
     </div>
   );
 }

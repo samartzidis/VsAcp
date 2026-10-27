@@ -19,10 +19,11 @@ internal static class VsAcpSettings
     public const string AgentCommandMoniker = "acpAgent.agentCommand";
     public const string AgentArgumentsMoniker = "acpAgent.agentArguments";
     public const string EnableChatDevToolsMoniker = "acpAgent.enableChatDevTools";
+    public const string EnableFileLoggingMoniker = "acpAgent.enableFileLogging";
 
     public static readonly string[] AllMonikers =
     {
-        PresetMoniker, AgentCommandMoniker, AgentArgumentsMoniker, EnableChatDevToolsMoniker,
+        PresetMoniker, AgentCommandMoniker, AgentArgumentsMoniker, EnableChatDevToolsMoniker, EnableFileLoggingMoniker,
     };
 
     const string CursorAgentCommand = "agent";
@@ -46,7 +47,9 @@ internal static class VsAcpSettings
                 ReadValue(reader, AgentArgumentsMoniker, CursorAgentArguments)),
             _ => (CursorAgentCommand, CursorAgentArguments),
         };
-        return new AgentSettings(preset, command, arguments, ReadValue(reader, EnableChatDevToolsMoniker, false));
+        return new AgentSettings(preset, command, arguments,
+            ReadValue(reader, EnableChatDevToolsMoniker, false),
+            ReadValue(reader, EnableFileLoggingMoniker, true));
     }
 
     static T ReadValue<T>(ISettingsReader? reader, string moniker, T fallback) where T : notnull
@@ -66,7 +69,7 @@ internal static class VsAcpSettings
 }
 
 /// <summary>Effective values of the ACP Agent settings at one point in time.</summary>
-internal sealed record AgentSettings(string Preset, string AgentCommand, string AgentArguments, bool EnableChatDevTools);
+internal sealed record AgentSettings(string Preset, string AgentCommand, string AgentArguments, bool EnableChatDevTools, bool EnableFileLogging);
 
 /// <summary>
 /// Service identity for Unified Settings' <see cref="ISettingsManager"/>. The documented service type

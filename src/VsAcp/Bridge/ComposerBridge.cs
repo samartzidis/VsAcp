@@ -288,6 +288,10 @@ internal sealed class ComposerBridge : IDisposable
                 UiThread.Post("folders.add", PickAndAddFolder);
                 break;
 
+            case "settings.open":
+                UiThread.Post("settings.open", VsAcpPackage.OpenSettings);
+                break;
+
             case "folders.remove":
                 _vm.RemoveExtraFolder(m.GetProperty("path").GetString() ?? "");
                 break;

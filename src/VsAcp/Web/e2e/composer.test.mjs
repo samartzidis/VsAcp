@@ -299,10 +299,20 @@ describe('toolbar, attachments and status', () => {
   });
 
   test('active-context button toggles and dims when disabled', async () => {
-    await page.locator('.ctx-btn').click();
+    // scoped to the toolbar: the footer's settings cog and folders chip are .ctx-btn too
+    await page.locator('.toolbar .ctx-btn').click();
     assert.equal(await countOf('composer.toggleActiveContext'), 1);
     await setState({ activeContext: { fileName: 'Program.cs', filePath: 'C:\\src\\Program.cs', enabled: false } });
-    assert.match(await page.locator('.ctx-btn').getAttribute('class'), /off/);
+    assert.match(await page.locator('.toolbar .ctx-btn').getAttribute('class'), /off/);
+  });
+
+  test('settings cog sits first in the footer row, left of the folders chip, and asks the host to open the settings', async () => {
+    await setState({ folders: { items: [], supported: true, canEdit: true } });
+    const order = await page.locator('.composer-footer > *').evaluateAll((els) => els.map((e) => e.className));
+    assert.match(order[0], /settings-btn/);
+    assert.match(order[1], /folders/);
+    await page.locator('.settings-btn').click();
+    assert.equal(await countOf('settings.open'), 1);
   });
 
   test('pending files list shows the files with their line counts and its actions', async () => {

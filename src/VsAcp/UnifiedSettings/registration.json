@@ -31,6 +31,13 @@
       "description": "Right-clicking the chat panel shows 'Inspect' to open the WebView2 developer tools (for chat tabs opened after the change). Disable in production.",
       "default": false,
       "order": 3
+    },
+    "acpAgent.enableFileLogging": {
+      "type": "boolean",
+      "title": "Enable file logging",
+      "description": "Writes the VsAcp log to %APPDATA%\\VsAcp\\logs (one file per day). The VsAcp pane in the Output window is always on. Takes effect immediately.",
+      "default": true,
+      "order": 4
     }
   },
   "categories": {
