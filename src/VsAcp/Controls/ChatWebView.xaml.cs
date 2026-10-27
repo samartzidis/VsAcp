@@ -92,6 +92,12 @@ public partial class ChatWebView : UserControl
         UiThread.Post("WebView2 init", InitializeWebViewAsync);
     }
 
+    /// <summary>
+    /// Gives the keyboard focus to the page. The WebView2 control takes the WPF focus and hands it on to the page as
+    /// a programmatic move, which keeps the page's focused element (the input, normally).
+    /// </summary>
+    public void FocusPage() => WebView.Focus();
+
     private async Task InitializeWebViewAsync()
     {
         try

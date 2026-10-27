@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Microsoft.VisualStudio.Shell;
+using VsAcp.Controls;
 using VsAcp.ViewModels;
 
 namespace VsAcp.ToolWindows;
@@ -16,6 +17,32 @@ public partial class TabbedChatControl : UserControl
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        GotKeyboardFocus += OnGotKeyboardFocus;
+    }
+
+    /// <summary>
+    /// The chat page is the only keyboard target of this tool window (besides the tab rename box), so keyboard focus
+    /// that lands anywhere else in it is passed on to the active page. Needed because WPF never sees the focus inside
+    /// a page (WebView2 is a Chromium window of another process): when a click into the page's input activates the
+    /// VS window, VS restores the focus a few milliseconds later to what it believes is focused, the tab strip, and
+    /// the input loses the focus the click just gave it.
+    /// </summary>
+    private void OnGotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (e.NewFocus is not DependencyObject target
+            || FindAncestor<ChatWebView>(target) is not null
+            || FindAncestor<TextBox>(target) is not null
+            || _activeSession is null
+            || !_tabControls.TryGetValue(_activeSession.Id, out var control))
+            return;
+
+        Serilog.Log.Debug("[TabbedChat] [Focus] Keyboard focus landed on {Element:l}; passing it to the chat page", target.GetType().Name);
+        // After this focus change has finished (moving the focus from inside its own event is unreliable), and only
+        // if nothing has moved it since.
+        UiThread.Post("Focus chat page", () =>
+        {
+            if (Keyboard.FocusedElement == target) control.ChatWebView.FocusPage();
+        });
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
