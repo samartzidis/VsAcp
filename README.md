@@ -25,6 +25,7 @@ A Visual Studio extension that hosts AI coding agents - Claude Code, Cursor, or 
 - **Extra folders** - share additional project folders with the agent beyond the solution folder
 - **Attachments** - file drag-drop, image paste, and code-reference paste from the editor as chips
 - **Slash commands** - agent-advertised commands as an inline picker
+- **Visual Studio state for the agent** - opt-in read-only tools (**Tools \> Options \> ACP Agent \> Let the agent read Visual Studio's state**) that let the agent read the Output window panes (Build, Debug, Tests and others), the active and open documents with the caret and selection, the solution's configuration and startup project, and whether a build or the debugger is running; served to agents that support HTTP MCP servers
 
 ## Limitations
 

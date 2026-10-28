@@ -15,8 +15,11 @@ using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Utilities.UnifiedSettings;
 using Serilog;
+using Serilog.Extensions.Logging;
 using Serilog.Formatting.Display;
 using VsAcp.Core.Configuration;
+using VsAcp.Core.IdeTools;
+using VsAcp.IdeTools;
 using VsAcp.InlineDiff;
 using VsAcp.Options;
 using VsAcp.ToolWindows;
@@ -61,6 +64,10 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
     // Read by the log pipeline on any thread, written on the UI thread by ApplySettings.
     // Starts on, like the setting's default, so startup lines before the first settings read are kept.
     private static volatile bool _fileLoggingEnabled = true;
+    // The IDE tools MCP server every chat tab offers its agent while the setting is on (ADR-061); the setting is read
+    // at each session setup and each request, from any thread.
+    private IdeToolsServer? _ideTools;
+    private volatile bool _ideToolsEnabled;
 
     public static bool IsLoaded => _instance is not null;
 
@@ -84,6 +91,14 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         }
 
         await LoadSettingsAsync(cancellationToken);
+
+        // Starts listening only when a chat first offers it to an agent with the setting on.
+        _ideTools = new IdeToolsServer(
+            new DteOutputPaneReader(JoinableTaskFactory),
+            new DteIdeStateReader(JoinableTaskFactory, this),
+            hiddenPaneIds: [OutputPaneGuid.ToString()],
+            isEnabled: () => _ideToolsEnabled,
+            new SerilogLoggerFactory(dispose: false));
 
         _sessionListViewModel = new SessionListViewModel();
 
@@ -166,8 +181,10 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         _agentSettings = resolved;
         Controls.ChatWebView.DevToolsEnabled = resolved.EnableChatDevTools;
         _fileLoggingEnabled = resolved.EnableFileLogging;
-        Log.Information("[Settings] Preset='{Preset}', AgentCommand='{Cmd}', AgentArguments='{Args}', DevTools={DevTools}, FileLogging={FileLogging}",
-            resolved.Preset, resolved.AgentCommand, resolved.AgentArguments, resolved.EnableChatDevTools, resolved.EnableFileLogging);
+        _ideToolsEnabled = resolved.EnableIdeTools;
+        Log.Information("[Settings] Preset='{Preset}', AgentCommand='{Cmd}', AgentArguments='{Args}', DevTools={DevTools}, FileLogging={FileLogging}, IdeTools={IdeTools}",
+            resolved.Preset, resolved.AgentCommand, resolved.AgentArguments, resolved.EnableChatDevTools, resolved.EnableFileLogging,
+            resolved.EnableIdeTools);
     }
 
     /// <summary>
@@ -238,6 +255,10 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
             o.AgentArgs = effectiveArgs
                 .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
         });
+
+        // This tab's token for the IDE tools; the container disposes the endpoint with the tab, which revokes it.
+        if (_ideTools is { } ideTools)
+            services.AddSingleton<IIdeToolsEndpoint>(_ => ideTools.CreateEndpoint(sessionId));
 
         var provider = services.BuildServiceProvider();
         _sessionProviders[sessionId] = provider;
@@ -837,6 +858,9 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
             foreach (var provider in _sessionProviders.Values)
                 provider.Dispose();
             _sessionProviders.Clear();
+
+            _ideTools?.Dispose();
+            _ideTools = null;
         }
         base.Dispose(disposing);
     }

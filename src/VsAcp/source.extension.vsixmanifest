@@ -13,13 +13,13 @@
     <Tags>ai,acp,claude,cursor</Tags>
   </Metadata>
   <Installation>
-    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.14,)">
+    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[18.10,)">
       <ProductArchitecture>amd64</ProductArchitecture>
     </InstallationTarget>
   </Installation>
   <Prerequisites>
     <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor"
-                  Version="[17.14,)"
+                  Version="[18.10,)"
                   DisplayName="Visual Studio core editor" />
   </Prerequisites>
   <Assets>

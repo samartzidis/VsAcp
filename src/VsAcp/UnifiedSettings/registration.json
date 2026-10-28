@@ -25,19 +25,26 @@
       "visibleWhen": "${config:acpAgent.preset} == 'custom'",
       "order": 2
     },
+    "acpAgent.enableIdeTools": {
+      "type": "boolean",
+      "title": "Let the agent read Visual Studio's state",
+      "description": "Gives the agent read-only tools for Visual Studio: the Output window panes (Build, Debug, Tests and others, except the VsAcp pane), the open and active documents with the caret and selection, the solution's configuration and startup project, and whether a build or the debugger is running. Output can contain secrets, such as tokens in package-manager output. Applies when an agent next starts a session; the agent must support HTTP MCP servers.",
+      "default": false,
+      "order": 3
+    },
     "acpAgent.enableChatDevTools": {
       "type": "boolean",
       "title": "Enable chat DevTools",
       "description": "Right-clicking the chat panel shows 'Inspect' to open the WebView2 developer tools (for chat tabs opened after the change). Disable in production.",
       "default": false,
-      "order": 3
+      "order": 4
     },
     "acpAgent.enableFileLogging": {
       "type": "boolean",
       "title": "Enable file logging",
       "description": "Writes the VsAcp log to %APPDATA%\\VsAcp\\logs (one file per day). The VsAcp pane in the Output window is always on. Takes effect immediately.",
       "default": true,
-      "order": 4
+      "order": 5
     }
   },
   "categories": {

@@ -101,8 +101,9 @@ public sealed class ChatHarness : IDisposable
     /// <param name="sessionId">A chat already in the store to be this tab's (default: a new one). With
     /// <c>configure</c> pointing <see cref="VsAcpOptions.WorkingDirectory"/> at another harness's
     /// <see cref="Workspace"/>, a second tab on the same workspace and store.</param>
+    /// <param name="services">Adds to the tab's container what the host adds (e.g. its IDE tools endpoint).</param>
     public static async Task<ChatHarness> CreateAsync(object? scenario = null, Action<VsAcpOptions>? configure = null,
-        SimulatedUiThread? uiThread = null, string? sessionId = null)
+        SimulatedUiThread? uiThread = null, string? sessionId = null, Action<IServiceCollection>? services = null)
     {
         // The workspace is snapshotted and restored, so the agent's scenario and log live beside it.
         var dir = new TempDirectory("workspace");
@@ -119,8 +120,8 @@ public sealed class ChatHarness : IDisposable
         var gate = new object();
         var session = new ChatSession();
 
-        var services = new ServiceCollection();
-        services.AddVsAcpServices(options =>
+        var container = new ServiceCollection();
+        container.AddVsAcpServices(options =>
         {
             options.WorkingDirectory = dir.Path;
             options.HasProjectDirectory = true;
@@ -133,12 +134,13 @@ public sealed class ChatHarness : IDisposable
             };
             configure?.Invoke(options);
         });
-        services.AddSingleton(log);
-        services.AddSingleton(typeof(ILogger<>), typeof(TestLogger<>));
+        container.AddSingleton(log);
+        container.AddSingleton(typeof(ILogger<>), typeof(TestLogger<>));
         var listener = new ForwardingListener();
-        services.AddSingleton<IOutputListener>(listener);
+        container.AddSingleton<IOutputListener>(listener);
+        services?.Invoke(container);
 
-        var provider = services.BuildServiceProvider();
+        var provider = container.BuildServiceProvider();
         try
         {
             var store = provider.GetRequiredService<ISessionStore>();

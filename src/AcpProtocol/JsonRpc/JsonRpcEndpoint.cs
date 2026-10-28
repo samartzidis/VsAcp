@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -227,7 +228,7 @@ internal sealed class JsonRpcEndpoint
         };
         _logger.LogDebug("ACP send {MessageType}: method='{Method}'", message.GetType().Name, method);
         if (_logger.IsEnabled(LogLevel.Trace))
-            _logger.LogTrace("ACP send: {Json}", json);
+            _logger.LogTrace("ACP send: {Json}", RedactForLog(json));
 
         await writeFunc(json, cancellationToken).ConfigureAwait(false);
     }
@@ -240,7 +241,7 @@ internal sealed class JsonRpcEndpoint
 
         _logger.LogDebug("ACP send request: method='{Method}' id={RequestId}", request.Method, request.Id);
         if (_logger.IsEnabled(LogLevel.Trace))
-            _logger.LogTrace("ACP send: {Json}", json);
+            _logger.LogTrace("ACP send: {Json}", RedactForLog(json));
 
         var tcs = new TaskCompletionSource<JsonRpcResponse>();
         pendingRequests.TryAdd(request.Id, tcs);
@@ -256,5 +257,38 @@ internal sealed class JsonRpcEndpoint
         await writeFunc(json, cancellationToken).ConfigureAwait(false);
 
         return await tcs.Task;
+    }
+
+    // Session setup can carry MCP server credentials (an HTTP server's Authorization header, a stdio server's env), and
+    // the Trace log goes to a file and the Output window: mask those values there. Fails closed.
+    internal static string RedactForLog(string json)
+    {
+        if (json.IndexOf("\"mcpServers\"", StringComparison.Ordinal) < 0)
+            return json;
+        try
+        {
+            var root = JsonNode.Parse(json);
+            if (root?["params"]?["mcpServers"] is not JsonArray servers)
+                return json;
+
+            foreach (var server in servers.OfType<JsonObject>())
+            {
+                foreach (var key in new[] { "headers", "env" })
+                {
+                    if (server[key] is not JsonArray pairs) continue;
+                    foreach (var pair in pairs.OfType<JsonObject>())
+                    {
+                        // No characters JSON escapes, so the log reads as written.
+                        if (pair.ContainsKey("value"))
+                            pair["value"] = "(redacted)";
+                    }
+                }
+            }
+            return root.ToJsonString();
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            return "<message with mcpServers, not logged>";
+        }
     }
 }
