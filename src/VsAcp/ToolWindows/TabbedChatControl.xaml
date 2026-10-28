@@ -4,7 +4,13 @@
              xmlns:vs="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0">
 
     <UserControl.Resources>
+        <!--
+            The tab-strip buttons never take keyboard focus: the chat page owns it (TabbedChatControl.OnGotKeyboardFocus
+            passes stray focus on to the page), and a button that loses keyboard focus mid-click cancels its press, so
+            focusable buttons never raised Click.
+        -->
         <Style x:Key="TabCloseButton" TargetType="Button">
+            <Setter Property="Focusable" Value="False"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Foreground" Value="{DynamicResource {x:Static vs:VsBrushes.GrayTextKey}}"/>
@@ -32,6 +38,7 @@
         </Style>
 
         <Style x:Key="NewTabButton" TargetType="Button">
+            <Setter Property="Focusable" Value="False"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Foreground" Value="{DynamicResource {x:Static vs:VsBrushes.GrayTextKey}}"/>

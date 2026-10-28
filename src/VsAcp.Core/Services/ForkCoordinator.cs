@@ -81,6 +81,7 @@ public sealed class ForkCoordinator
         entry.AcpSessionId = agentSessionId;
         entry.AgentCommand = source?.AgentCommand;
         entry.AgentArgs = source?.AgentArgs;
+        entry.AgentPreset = source?.AgentPreset;
         await store.UpdateSessionAsync(entry);
 
         var messages = kept.Select(m => Copy(m, checkpointCopies)).ToList();

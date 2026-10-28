@@ -28,6 +28,12 @@ public class VsAcpOptions
     public string[] AgentArgs { get; set; } = ["acp"];
 
     /// <summary>
+    /// The Tools &gt; Options preset the command came from (<see cref="Services.AgentPresets"/>), saved with the chat;
+    /// it decides the logo in the composer. Null when unknown.
+    /// </summary>
+    public string? AgentPreset { get; set; }
+
+    /// <summary>
     /// Additional environment variables passed to the agent process.
     /// </summary>
     public Dictionary<string, string> AgentEnv { get; set; } = new();

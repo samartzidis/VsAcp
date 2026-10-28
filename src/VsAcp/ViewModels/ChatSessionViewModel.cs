@@ -179,6 +179,9 @@ public partial class ChatSessionViewModel : ObservableObject, IDisposable
 
     public string WorkingDirectory { get; }
 
+    /// <summary>"claude" or "cursor" when this tab's agent was started from that built-in preset (<see cref="AgentPresets.Logo"/>), else null.</summary>
+    public string? AgentLogo { get; }
+
     /// <summary>
     /// The <see cref="SessionInfo"/> entry in the session list that owns this view model.
     /// When set, cost is updated on the entry after each completed message exchange.
@@ -332,9 +335,10 @@ public partial class ChatSessionViewModel : ObservableObject, IDisposable
         _chatService = chatService;
         _acpSessionLifecycle = acpSessionLifecycle;
         WorkingDirectory = options.Value.WorkingDirectory;
+        AgentLogo = AgentPresets.Logo(options.Value.AgentPreset);
         _checkpointService = checkpointService;
         _controller = new ChatSessionController(_session, chatService, checkpointService, permissionBroker, elicitationBroker, Dispatch,
-            acpSessionLifecycle, options.Value.AgentCommand, string.Join(" ", options.Value.AgentArgs), NextElementId);
+            acpSessionLifecycle, options.Value.AgentCommand, string.Join(" ", options.Value.AgentArgs), NextElementId, options.Value.AgentPreset);
         _controller.TitleChanged += title => SessionTitle = title;
 
         // Agent steps go straight to the session, which mutates the ChatMessage and raises the matching change

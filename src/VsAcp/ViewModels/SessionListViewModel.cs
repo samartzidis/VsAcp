@@ -26,6 +26,9 @@ public partial class SessionInfo : ObservableObject
     /// </summary>
     public string? AgentArgs { get; set; }
 
+    /// <summary>The Tools &gt; Options preset <see cref="AgentCommand"/> came from; null when not recorded.</summary>
+    public string? AgentPreset { get; set; }
+
     [ObservableProperty]
     private string _name = "New Session";
 
@@ -96,6 +99,7 @@ public partial class SessionListViewModel : ObservableObject
                 PersistedId = entry.Id,
                 AgentCommand = entry.AgentCommand,
                 AgentArgs = entry.AgentArgs,
+                AgentPreset = entry.AgentPreset,
                 Name = entry.Title,
                 LastActivity = entry.LastActivityUtc.ToLocalTime(),
                 IsActive = false
@@ -137,6 +141,7 @@ public partial class SessionListViewModel : ObservableObject
             PersistedId = entry.Id,
             AgentCommand = entry.AgentCommand,
             AgentArgs = entry.AgentArgs,
+            AgentPreset = entry.AgentPreset,
             Name = entry.Title,
             IsActive = true
         };

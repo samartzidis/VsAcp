@@ -33,4 +33,10 @@ public class SessionEntry
     /// </summary>
     public string? AgentArgs { get; set; }
 
+    /// <summary>
+    /// The Tools &gt; Options preset <see cref="AgentCommand"/> came from ("cursor", "claudeCode", "custom").
+    /// Null for chats saved before it was recorded.
+    /// </summary>
+    public string? AgentPreset { get; set; }
+
 }

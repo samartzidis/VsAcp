@@ -55,7 +55,8 @@ public sealed class ChatHarness : IDisposable
             : action => ui.Dispatch(() => { lock (gate) action(); });
         _controller = new ChatSessionController(session, Service, Checkpoints, Permissions,
             provider.GetService<IElicitationBroker>(), dispatch,
-            lifecycle: Service, agentCommand: options.AgentCommand, agentArgs: string.Join(" ", options.AgentArgs));
+            lifecycle: Service, agentCommand: options.AgentCommand, agentArgs: string.Join(" ", options.AgentArgs),
+            agentPreset: options.AgentPreset);
         _controller.PersistFailed += (what, ex) => log.Add($"PERSIST FAILED {what}: {ex}");
         _controller.TitleChanged += title => Title = title;
         _controller.AttachStore(Store, entry.Id);

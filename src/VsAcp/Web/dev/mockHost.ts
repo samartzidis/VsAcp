@@ -38,6 +38,7 @@ export const defaultState: ComposerState = {
   pendingFiles: [],
   folders: null,
   activeFolders: null,
+  agent: null,
 };
 
 export interface MockHost {
