@@ -668,6 +668,36 @@ describe('session folders button (this chat\'s active folders)', () => {
   });
 });
 
+describe('agent logo in the toolbar', () => {
+  const badge = () => page.locator('.toolbar .tb-left .agent-badge');
+
+  test('shows no logo for an agent that is neither Claude nor Cursor', async () => {
+    assert.equal(await badge().count(), 0);
+  });
+
+  test('shows the Claude logo, first in the left group of the toolbar', async () => {
+    await setState({ agent: 'claude' });
+    assert.equal(await badge().count(), 1);
+    assert.equal(await badge().getAttribute('title'), 'Claude Code');
+    assert.equal(await badge().locator('svg path').getAttribute('fill'), '#D97757');
+    assert.equal(await page.locator('.toolbar .tb-left > :first-child').getAttribute('class'), 'agent-badge');
+  });
+
+  test('shows the Cursor logo in the text colour', async () => {
+    await setState({ agent: 'cursor' });
+    assert.equal(await badge().getAttribute('title'), 'Cursor');
+    assert.equal(await badge().locator('svg path').getAttribute('fill'), 'currentColor');
+  });
+
+  test('sits on the same row as the toolbar buttons', async () => {
+    await setState({ agent: 'claude' });
+    const logo = await badge().boundingBox();
+    const dropdown = await page.locator('.toolbar .dd-btn').first().boundingBox();
+    assert.ok(Math.abs(logo.y + logo.height / 2 - (dropdown.y + dropdown.height / 2)) < 4);
+    assert.ok(logo.x < dropdown.x);
+  });
+});
+
 async function assertVisible(selector) {
   assert.equal(await page.locator(selector).isVisible(), true, `${selector} should be visible`);
 }

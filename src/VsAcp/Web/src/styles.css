@@ -481,6 +481,16 @@
   cursor: default;
 }
 
+/* the logo of the agent this tab runs, at the left end of the toolbar row; not interactive */
+.agent-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  padding: 0 6px;
+  color: var(--text-primary);
+  cursor: default;
+}
+
 .tb-btn.stop.busy {
   color: var(--danger-fg);
 }

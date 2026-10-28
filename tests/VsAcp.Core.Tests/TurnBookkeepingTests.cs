@@ -54,6 +54,16 @@ public class TurnBookkeepingTests
     }
 
     [Fact]
+    public async Task A_completed_turn_saves_the_preset_with_the_command()
+    {
+        using var h = await ChatHarness.CreateAsync(configure: o => o.AgentPreset = AgentPresets.ClaudeCode);
+
+        Assert.Equal(TurnResult.Completed, await h.SendAsync("hello"));
+
+        Assert.Equal(AgentPresets.ClaudeCode, (await h.IndexEntryAsync()).AgentPreset);
+    }
+
+    [Fact]
     public async Task A_failed_turn_does_not_save_the_agent_session_id()
     {
         using var h = await ChatHarness.CreateAsync(FailingTurn());

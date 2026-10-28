@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.Utilities.UnifiedSettings;
+using VsAcp.Core.Services;
 
 namespace VsAcp.Options;
 
@@ -11,10 +12,6 @@ namespace VsAcp.Options;
 /// </summary>
 internal static class VsAcpSettings
 {
-    public const string PresetCursor = "cursor";
-    public const string PresetClaudeCode = "claudeCode";
-    public const string PresetCustom = "custom";
-
     public const string PresetMoniker = "acpAgent.preset";
     public const string AgentCommandMoniker = "acpAgent.agentCommand";
     public const string AgentArgumentsMoniker = "acpAgent.agentArguments";
@@ -26,27 +23,26 @@ internal static class VsAcpSettings
         PresetMoniker, AgentCommandMoniker, AgentArgumentsMoniker, EnableChatDevToolsMoniker, EnableFileLoggingMoniker,
     };
 
-    const string CursorAgentCommand = "agent";
-    const string CursorAgentArguments = "acp";
-    const string ClaudeCodeCommand = "npx";
-    const string ClaudeCodeArguments = "@agentclientprotocol/claude-agent-acp --yes";
-
     /// <summary>
     /// Turns a settings read into the effective agent command line. <paramref name="reader"/> may be null
     /// (Unified Settings unavailable), which yields the declared defaults. A preset cannot populate the
-    /// command fields, so it is resolved here and the fields only appear for "Custom".
+    /// command fields, so it is resolved here and the fields only appear for "Custom". An unknown preset
+    /// value is treated as Cursor, the default.
     /// </summary>
     internal static AgentSettings Read(ISettingsReader? reader)
     {
-        var preset = ReadValue(reader, PresetMoniker, PresetCursor);
-        var (command, arguments) = preset switch
+        var preset = ReadValue(reader, PresetMoniker, AgentPresets.Cursor);
+        string command, arguments;
+        if (preset == AgentPresets.Custom)
         {
-            PresetClaudeCode => (ClaudeCodeCommand, ClaudeCodeArguments),
-            PresetCustom => (
-                ReadValue(reader, AgentCommandMoniker, CursorAgentCommand),
-                ReadValue(reader, AgentArgumentsMoniker, CursorAgentArguments)),
-            _ => (CursorAgentCommand, CursorAgentArguments),
-        };
+            command = ReadValue(reader, AgentCommandMoniker, AgentPresets.CursorCommand);
+            arguments = ReadValue(reader, AgentArgumentsMoniker, AgentPresets.CursorArguments);
+        }
+        else
+        {
+            if (AgentPresets.CommandLine(preset) is null) preset = AgentPresets.Cursor;
+            (command, arguments) = AgentPresets.CommandLine(preset)!.Value;
+        }
         return new AgentSettings(preset, command, arguments,
             ReadValue(reader, EnableChatDevToolsMoniker, false),
             ReadValue(reader, EnableFileLoggingMoniker, true));

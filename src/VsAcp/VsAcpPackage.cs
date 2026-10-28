@@ -192,7 +192,8 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
     private ChatSessionViewModel CreateChatViewModel(
         string sessionId,
         string? savedAgentCommand = null,
-        string? savedAgentArgs = null)
+        string? savedAgentArgs = null,
+        string? savedAgentPreset = null)
     {
         ThreadHelper.ThrowIfNotOnUIThread();
 
@@ -220,6 +221,8 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         // Use per-session saved command when available (restored sessions); fall back to global options.
         var effectiveCommand = savedAgentCommand ?? options.AgentCommand;
         var effectiveArgs = savedAgentArgs ?? options.AgentArguments;
+        // The preset goes with the command: a saved chat keeps its own (none for chats saved before it was recorded).
+        var effectivePreset = savedAgentCommand is null ? options.Preset : savedAgentPreset;
 
         Log.Information("[Settings] Building tab DI container: AgentCommand='{Cmd}', AgentArguments='{Args}'{Override}",
             effectiveCommand, effectiveArgs,
@@ -231,6 +234,7 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
             o.HasProjectDirectory = currentSolutionDir is not null && !isNetworkPath;
             o.AdditionalDirectories = additionalDirs;
             o.AgentCommand = effectiveCommand;
+            o.AgentPreset = effectivePreset;
             o.AgentArgs = effectiveArgs
                 .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
         });
@@ -552,7 +556,7 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         ChatSessionViewModel viewModel;
         try
         {
-            viewModel = _instance.CreateChatViewModel(session.Id, session.AgentCommand, session.AgentArgs);
+            viewModel = _instance.CreateChatViewModel(session.Id, session.AgentCommand, session.AgentArgs, session.AgentPreset);
         }
         catch (Exception ex)
         {

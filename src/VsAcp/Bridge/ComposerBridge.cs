@@ -159,7 +159,8 @@ internal sealed class ComposerBridge : IDisposable
             : null,
         ActiveFolders: _vm.ActiveAdditionalDirectories?
             .Select(p => new FolderDto(p, FolderName(p), "active"))
-            .ToList());
+            .ToList(),
+        Agent: _vm.AgentLogo);
 
     private static string FolderName(string path)
     {

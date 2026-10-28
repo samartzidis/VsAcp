@@ -26,6 +26,7 @@ public sealed class ChatSessionController : IDisposable
     private readonly IAcpSessionLifecycle? _lifecycle;
     private readonly string? _agentCommand;
     private readonly string? _agentArgs;
+    private readonly string? _agentPreset;
     private readonly Func<string, string> _nextId;
     private readonly ChatTurnRunner _runner;
 
@@ -41,6 +42,7 @@ public sealed class ChatSessionController : IDisposable
     /// <param name="agentCommand">Recorded with the agent session id, so a later reopen knows which agent it belongs to.</param>
     /// <param name="agentArgs">See <paramref name="agentCommand"/>.</param>
     /// <param name="nextId">Maps an element-id prefix to an id unique within the session; defaults to a per-controller counter.</param>
+    /// <param name="agentPreset">The Tools &gt; Options preset the agent command came from; saved with the command.</param>
     public ChatSessionController(
         ChatSession session,
         IChatService? chatService,
@@ -51,7 +53,8 @@ public sealed class ChatSessionController : IDisposable
         IAcpSessionLifecycle? lifecycle = null,
         string? agentCommand = null,
         string? agentArgs = null,
-        Func<string, string>? nextId = null)
+        Func<string, string>? nextId = null,
+        string? agentPreset = null)
     {
         _session = session;
         _chatService = chatService;
@@ -62,6 +65,7 @@ public sealed class ChatSessionController : IDisposable
         _lifecycle = lifecycle;
         _agentCommand = agentCommand;
         _agentArgs = agentArgs;
+        _agentPreset = agentPreset;
 
         if (nextId is null)
         {
@@ -222,6 +226,7 @@ public sealed class ChatSessionController : IDisposable
 
         var agentCommand = _agentCommand;
         var agentArgs = _agentArgs;
+        var agentPreset = _agentPreset;
 
         EnqueueSessionIndexMutation($"acp session id for {SessionId}", entry =>
         {
@@ -229,6 +234,7 @@ public sealed class ChatSessionController : IDisposable
             entry.AcpSessionId = acpId;
             entry.AgentCommand = agentCommand;
             entry.AgentArgs = agentArgs;
+            entry.AgentPreset = agentPreset;
         });
     }
 
