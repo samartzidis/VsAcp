@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { MessageView } from './MessageView';
-import { order, resetCount } from './store';
+import { useChat } from '../chat';
 
 const NEAR_BOTTOM_PX = 50;
 
@@ -9,6 +9,7 @@ const NEAR_BOTTOM_PX = 50;
  * finish loading) unless the user has scrolled up to read, and jumps to the end when the list is replaced.
  */
 export function MessageList() {
+  const { order, resetCount } = useChat().messages;
   const ids = order.value;
   const reset = resetCount.value;
   const scroller = useRef<HTMLDivElement>(null);
@@ -40,7 +41,7 @@ export function MessageList() {
   }, [reset]);
 
   return (
-    <div id="chat-container" class="message-list" ref={scroller}>
+    <div class="message-list" ref={scroller}>
       <div class="message-list-inner" ref={inner}>
         {ids.map((id) => (
           <MessageView key={id} id={id} />

@@ -1,11 +1,11 @@
-import { banner } from '../state';
+import { useChat } from '../chat';
 import { ElicitationBanner } from './ElicitationBanner';
 import { RevertBanner } from './RevertBanner';
 import { PermissionBanner, ErrorBanner } from './SimpleBanners';
 
 /** The single prompt between the message list and the composer. A newer banner replaces an older one. */
 export function BannerHost() {
-  const b = banner.value;
+  const b = useChat().banner.value;
   if (!b) return null;
   // keyed by id so a replacement banner never inherits the previous one's form state
   switch (b.kind) {

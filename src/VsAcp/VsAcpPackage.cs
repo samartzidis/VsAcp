@@ -206,6 +206,40 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         Log.Information("[Settings] Open: PostExecCommand(ToolsOptions, '{Arg}') hr=0x{Hr:X8}", arg, hr);
     }
 
+    /// <summary>
+    /// The shared folders of the open solution, for the panel's folders chip (which is there with or without a chat
+    /// open); null when no solution is open or it has no local folder to save the choices in.
+    /// </summary>
+    internal static ExtraFoldersController? CurrentExtraFolders()
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        if (_instance?.GetSolutionDirectory() is not { } dir || VsAcpPaths.IsNetworkPath(dir)) return null;
+        var key = ProjectFolders.Normalize(dir) ?? dir;
+        return _instance._extraFolders.TryGetValue(key, out var existing)
+            ? existing
+            : _instance.ExtraFoldersOf(dir, _instance.GetProjectDirectoriesOutside(dir));
+    }
+
+    /// <summary>
+    /// The solution's shared folders (one list per solution folder, created on first use), with its auto-detected
+    /// project folders brought up to date. Only for a local project folder: that is where the choices are saved.
+    /// </summary>
+    private ExtraFoldersController? ExtraFoldersOf(string? solutionDir, string[] autoDirectories)
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        if (solutionDir is null || VsAcpPaths.IsNetworkPath(solutionDir)) return null;
+
+        var key = ProjectFolders.Normalize(solutionDir) ?? solutionDir;
+        if (_extraFolders.TryGetValue(key, out var extraFolders))
+            extraFolders.SetAutoDirectories(autoDirectories); // the solution's projects may have changed since
+        else
+            _extraFolders[key] = extraFolders = new ExtraFoldersController(
+                solutionDir,
+                autoDirectories,
+                new ExtraFoldersStore(VsAcpPaths.ExtraFoldersPath(solutionDir)));
+        return extraFolders;
+    }
+
     private ChatSessionViewModel CreateChatViewModel(
         string sessionId,
         string? savedAgentCommand = null,
@@ -301,21 +335,10 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         var vm = new ChatSessionViewModel(chatService, acpSessionLifecycle, outputListener, optionsAccessor, permissionBroker, checkpointService, elicitationBroker);
 
         // Folders beyond the solution folder: the auto-detected project folders plus the user's choices for this
-        // solution. Only with a local project folder (that is where the choices are saved). The list is shared by
-        // every tab of the solution; each tab puts the merged list into its own agent options, so it applies to
-        // every session that tab starts or loads.
-        if (currentSolutionDir is not null && !isNetworkPath)
-        {
-            var key = ProjectFolders.Normalize(currentSolutionDir) ?? currentSolutionDir;
-            if (_extraFolders.TryGetValue(key, out var extraFolders))
-                extraFolders.SetAutoDirectories(additionalDirs); // the solution's projects may have changed since
-            else
-                _extraFolders[key] = extraFolders = new ExtraFoldersController(
-                    currentSolutionDir,
-                    additionalDirs,
-                    new ExtraFoldersStore(VsAcpPaths.ExtraFoldersPath(currentSolutionDir)));
+        // solution. The list is shared by every tab of the solution; each tab puts the merged list into its own agent
+        // options, so it applies to every session that tab starts or loads.
+        if (ExtraFoldersOf(currentSolutionDir, additionalDirs) is { } extraFolders)
             vm.AttachExtraFolders(extraFolders, dirs => optionsAccessor.Value.AdditionalDirectories = dirs);
-        }
 
         vm.RevertCompleted += () => _ = JoinableTaskFactory.RunAsync(async () =>
         {
@@ -492,6 +515,42 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         }
     }
 
+    /// <summary>
+    /// Makes the chat tool window VS's active window, unless it already is. A click into the page goes to Chromium's own
+    /// window, so VS never hears of it: it keeps another window (an editor, say) as the active one, and when the VS
+    /// window is activated (the click came from another app) it restores the focus there, out of the page (ADR-057).
+    /// Activating this window makes VS put the focus in it, and TabbedChatControl passes it on to the page.
+    /// </summary>
+    internal static void ActivateChatWindow()
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        if (ChatWindowFrame() is not { } frame || IsActiveFrame(frame)) return;
+
+        Log.Debug("[TabbedChat] [Focus] The page took the focus while another VS window was active; activating the chat window");
+        frame.Show();
+    }
+
+    /// <summary>Whether the chat tool window is VS's active window (the one VS gives the focus back to).</summary>
+    internal static bool IsChatWindowActive()
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        return ChatWindowFrame() is { } frame && IsActiveFrame(frame);
+    }
+
+    private static IVsWindowFrame? ChatWindowFrame()
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        return _instance?.FindToolWindow(typeof(VsAcpToolWindow), 0, false)?.Frame as IVsWindowFrame;
+    }
+
+    private static bool IsActiveFrame(IVsWindowFrame frame)
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        return _instance?.GetService(typeof(SVsShellMonitorSelection)) is IVsMonitorSelection selection
+            && selection.GetCurrentElementValue((uint)Microsoft.VisualStudio.VSConstants.VSSELELEMID.SEID_WindowFrame, out var active) == Microsoft.VisualStudio.VSConstants.S_OK
+            && ReferenceEquals(active, frame);
+    }
+
     private TabbedChatControl? GetTabbedChat()
     {
         ThreadHelper.ThrowIfNotOnUIThread();
@@ -568,7 +627,7 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         }
     }
 
-    internal static void InitializeChatControl(ChatSessionControl control, SessionInfo session)
+    internal static void InitializeChatControl(ChatTab control, SessionInfo session)
     {
         if (_instance is null) return;
 

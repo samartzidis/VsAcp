@@ -1,5 +1,5 @@
 import { post, postWithFiles } from '../bridge/host';
-import { composer, editor } from '../state';
+import { activeChat, panelFolders } from '../panel';
 
 /**
  * Drag and drop for the whole page. WebView2 owns the OLE drop target for its window, so the page (not
@@ -7,20 +7,23 @@ import { composer, editor } from '../state';
  * objects; a drag that carries no files (Solution Explorer items) is still reported so the host can
  * fall back to the current Solution Explorer selection; plain text is inserted into the input.
  *
- * A drop on the shared-folders chip (or its popover) is a separate target: the host adds the folders among
- * the dropped items as extra folders (`folders.drop`). A read-only chip accepts nothing.
+ * A drop on the shared-folders chip in the panel footer (or its popover) is a separate target: the host adds the
+ * folders among the dropped items as extra folders (`folders.drop`). A read-only chip accepts nothing.
+ *
+ * Every other drop goes to the chat being shown (the only one that can be under the pointer); with no chat open
+ * only the folders chip takes drops.
  */
 export function installDropHandling(): void {
   let depth = 0;
-  const box = () => document.querySelector('.composer-box');
+  const inChat = (selector: string) => activeChat()?.root.current?.querySelector(selector) ?? null;
+  const box = () => inChat('.composer-box');
   const chip = () => document.querySelector('.folders-btn');
   const clear = () => {
     depth = 0;
-    box()?.classList.remove('drop-target');
-    chip()?.classList.remove('drop-target');
+    document.querySelectorAll('.drop-target').forEach((el) => el.classList.remove('drop-target'));
   };
   const overFolders = (e: Event) => e.target instanceof Element && e.target.closest('.folders') !== null;
-  const foldersEditable = () => composer.value.folders?.canEdit === true;
+  const foldersEditable = () => panelFolders.value?.canEdit === true;
 
   // exactly one place is highlighted: the chip when the drag is over it (and it can take drops), else the composer box
   const highlight = (e: Event) => {
@@ -40,7 +43,8 @@ export function installDropHandling(): void {
   document.addEventListener('dragover', (e) => {
     e.preventDefault(); // allows the drop and stops the browser from navigating to a dropped file
     highlight(e);
-    if (e.dataTransfer) e.dataTransfer.dropEffect = overFolders(e) && !foldersEditable() ? 'none' : 'copy';
+    const accepted = overFolders(e) ? foldersEditable() : activeChat() !== null;
+    if (e.dataTransfer) e.dataTransfer.dropEffect = accepted ? 'copy' : 'none';
   });
   document.addEventListener('drop', (e) => {
     e.preventDefault();
@@ -52,12 +56,14 @@ export function installDropHandling(): void {
       else post({ type: 'folders.drop' });
       return;
     }
+    const chat = activeChat();
+    if (!chat) return;
     const text = e.dataTransfer?.getData('text/plain') ?? '';
     if (files.length === 0 && text.length > 0) {
-      editor.current?.insertText(text);
+      chat.editor.current?.insertText(text);
       return;
     }
-    if (files.length > 0) postWithFiles({ type: 'composer.drop' }, files);
-    else post({ type: 'composer.drop' });
+    if (files.length > 0) chat.postWithFiles({ type: 'composer.drop' }, files);
+    else chat.post({ type: 'composer.drop' });
   });
 }

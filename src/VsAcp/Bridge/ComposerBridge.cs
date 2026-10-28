@@ -25,7 +25,7 @@ internal sealed class ComposerBridge : IDisposable
     private const string PlaceholderConnecting = "Connecting to agent...";
 
     private readonly ChatSessionViewModel _vm;
-    private readonly ChatWebView _web;
+    private readonly ChatTabChannel _web;
     private readonly InlineDiffManager? _diff;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly ConditionalWeakTable<object, string> _ids = new();
@@ -37,7 +37,7 @@ internal sealed class ComposerBridge : IDisposable
     private bool _disposed;
     private string? _lastStateJson;
 
-    public ComposerBridge(ChatSessionViewModel vm, ChatWebView web, InlineDiffManager? diff)
+    public ComposerBridge(ChatSessionViewModel vm, ChatTabChannel web, InlineDiffManager? diff)
     {
         _vm = vm;
         _web = web;
@@ -52,7 +52,6 @@ internal sealed class ComposerBridge : IDisposable
 
         _web.BridgeMessage += OnPageMessage;
         _web.FilesDropped += OnFilesDropped;
-        _web.FoldersDropped += OnFoldersDropped;
     }
 
     public void Dispose()
@@ -66,7 +65,6 @@ internal sealed class ComposerBridge : IDisposable
         if (_diff is not null) _diff.PendingChanged -= OnPendingChanged;
         _web.BridgeMessage -= OnPageMessage;
         _web.FilesDropped -= OnFilesDropped;
-        _web.FoldersDropped -= OnFoldersDropped;
     }
 
     /// <summary>Puts the caret in the input box (after files are dropped, for example).</summary>
@@ -151,16 +149,17 @@ internal sealed class ComposerBridge : IDisposable
                 VsAcp.Core.Services.ProjectFolders.RelativeTo(_vm.WorkingDirectory, f.FilePath),
                 f.Kind.ToString().ToLowerInvariant(), f.Added, f.Removed, f.Source.ToString().ToLowerInvariant()))
             .ToList() ?? new List<PendingFileDto>(),
-        Folders: _vm.ExtraFolders is { } folders
-            ? new FoldersDto(
-                folders.Folders.Select(f => new FolderDto(f.Path, FolderName(f.Path), f.Source.ToString().ToLowerInvariant())).ToList(),
-                _vm.SupportsAdditionalDirectories,
-                folders.CanEdit)
-            : null,
+        Folders: _vm.ExtraFolders is { } folders ? FoldersStateOf(folders, _vm.SupportsAdditionalDirectories) : null,
         ActiveFolders: _vm.ActiveAdditionalDirectories?
             .Select(p => new FolderDto(p, FolderName(p), "active"))
             .ToList(),
         Agent: _vm.AgentLogo);
+
+    /// <summary>The shared folders as the page shows them; <paramref name="supported"/> is whether the agent uses them (null: not known yet).</summary>
+    internal static FoldersDto FoldersStateOf(VsAcp.Core.Services.ExtraFoldersController folders, bool? supported) => new(
+        folders.Folders.Select(f => new FolderDto(f.Path, FolderName(f.Path), f.Source.ToString().ToLowerInvariant())).ToList(),
+        supported,
+        folders.CanEdit);
 
     private static string FolderName(string path)
     {
@@ -190,20 +189,6 @@ internal sealed class ComposerBridge : IDisposable
         catch (Exception ex)
         {
             Serilog.Log.Warning(ex, "[Composer] Failed to handle dropped files");
-        }
-    }
-
-    private void OnFoldersDropped(string[] paths)
-    {
-        ThreadHelper.ThrowIfNotOnUIThread();
-        try
-        {
-            Serilog.Log.Information("[Folders] Items dropped on the folders chip: {Count}", paths.Length);
-            _vm.AddDroppedFolders(paths);
-        }
-        catch (Exception ex)
-        {
-            Serilog.Log.Warning(ex, "[Folders] Failed to handle dropped folders");
         }
     }
 
@@ -284,19 +269,6 @@ internal sealed class ComposerBridge : IDisposable
                 _vm.ToggleActiveContextCommand.Execute(null);
                 break;
 
-            case "folders.add":
-                // Not inside the WebView2 message callback: the folder dialog is modal.
-                UiThread.Post("folders.add", PickAndAddFolder);
-                break;
-
-            case "settings.open":
-                UiThread.Post("settings.open", VsAcpPackage.OpenSettings);
-                break;
-
-            case "folders.remove":
-                _vm.RemoveExtraFolder(m.GetProperty("path").GetString() ?? "");
-                break;
-
             case "changes.acceptAll": _diff?.AcceptAll(ChangesSource(m)); break;
             case "changes.rejectAll": _diff?.RejectAll(ChangesSource(m)); break;
             case "changes.open": _diff?.OpenFile(m.GetProperty("path").GetString() ?? ""); break;
@@ -310,16 +282,6 @@ internal sealed class ComposerBridge : IDisposable
         m.TryGetProperty("source", out var s) && s.ValueKind == JsonValueKind.String
             ? s.GetString() switch { "agent" => DiffSource.Agent, "scan" => DiffSource.Scan, _ => null }
             : null;
-
-    private void PickAndAddFolder()
-    {
-        ThreadHelper.ThrowIfNotOnUIThread();
-        var picked = FolderPicker.Pick("Choose a folder to share with the agent", _vm.WorkingDirectory);
-        if (picked is null) return;
-
-        Serilog.Log.Information("[Folders] Adding {Path}", picked);
-        _vm.AddExtraFolder(picked);
-    }
 
     private void ApplyInput(JsonElement m)
     {

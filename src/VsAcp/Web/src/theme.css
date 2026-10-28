@@ -1,7 +1,7 @@
 /*
  * The page's whole colour system, in one place.
  *
- * The host (ChatSessionControl.ApplyThemeColors) pushes only a few ANCHORS from Visual Studio, as inline
+ * The host (TabbedChatControl.ApplyThemeColors) pushes only a few ANCHORS from Visual Studio, as inline
  * custom properties on <html>:
  *     --bg-primary, --text-primary   the editor's Plain Text colours
  *     --border, --accent             the theme's border and link colours

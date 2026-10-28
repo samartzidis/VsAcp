@@ -2,6 +2,7 @@
 // fresh headless Edge page per test. Importing this module registers the before/after hooks, so the
 // importing file only has to define its tests. `page` always refers to the current test's page.
 
+import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach } from 'node:test';
 import { createServer } from 'vite';
 import { chromium } from 'playwright-core';
@@ -30,7 +31,10 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  // every per-tab message the page posted must have carried its tab's id (see dev/mockHost.ts)
+  const errors = await current.evaluate(() => window.__host.errors);
   await current.close();
+  assert.deepEqual(errors, [], 'messages posted for the wrong tab');
 });
 
 export const page = new Proxy(
@@ -49,5 +53,9 @@ export const countOf = async (type) => (await sent()).filter((m) => m.type === t
 export const deliver = (message) => page.evaluate((m) => window.__host.deliver(m), message);
 export const setState = (patch) =>
   page.evaluate((p) => window.__host.deliver({ type: 'state', state: { ...window.__host.defaultState, ...p } }), patch);
-export const editor = () => page.locator('.editor');
+/** The panel's own state (the footer's shared folders). */
+export const setPanel = (panel) => page.evaluate((p) => window.__host.deliver({ type: 'panel', folders: null, ...p }), panel);
+/** The tabs as the host would send them; each is `{ id, name, active?, open? }` (open by default). */
+export const setTabs = (tabs) => page.evaluate((t) => window.__host.setTabs(t), tabs);
+export const editor = () => page.locator('.chat-view:not([hidden]) .editor');
 export const chip = () => page.locator('.editor .cmd-chip');

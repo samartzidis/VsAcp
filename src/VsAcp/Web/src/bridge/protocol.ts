@@ -1,6 +1,9 @@
-// Contract between the WebView2 page (this project) and the VS host (ChatWebView / ComposerBridge in
-// C#). Every message is a JSON object with a string `type`. Keep this file and
+// Contract between the WebView2 page (this project) and the VS host (ChatWebView / ChatTabChannel /
+// ComposerBridge in C#). Every message is a JSON object with a string `type`. Keep this file and
 // Bridge/ComposerProtocol.cs in sync; the C# side serialises with camelCase names.
+//
+// The page can hold several chat tabs. A message that belongs to one chat carries that tab's id in `tab`, in both
+// directions; panel messages (the theme, the tab list, the page starting) carry none.
 
 export interface Choice {
   id: string;
@@ -108,6 +111,7 @@ export interface ComposerState {
   autoApprove: boolean;
   usage: Usage | null;
   pendingFiles: PendingFile[];
+  /** The solution's shared folders as this chat's agent sees them (whether it supports them); compared with `activeFolders`. */
   folders: FoldersState | null;
   /** The extra folders this tab's agent session was started with; null until the session exists. May differ from `folders`. */
   activeFolders: SharedFolder[] | null;
@@ -244,15 +248,30 @@ export interface ThemeMessage {
   highContrast: boolean;
 }
 
-/** Host -> page. */
-export type HostMessage =
+/** A chat tab as the panel shows it. Only an `open` tab has a chat (its agent, composer and messages) in the page. */
+export interface TabInfo {
+  id: string;
+  name: string;
+  active: boolean;
+  open: boolean;
+}
+
+/** Host -> page, for the whole panel. */
+export type PanelHostMessage =
+  | ThemeMessage
+  /** The tabs, in order. The page creates a chat for each open tab it does not have yet and drops the rest. */
+  | { type: 'tabs'; tabs: TabInfo[] }
+  /** The panel's own controls (the footer): the solution's shared folders, null when there is no local project. */
+  | { type: 'panel'; folders: FoldersState | null };
+
+/** Host -> page, for one chat (sent with its `tab`). */
+export type TabHostMessage =
   | { type: 'state'; state: ComposerState }
   | { type: 'composer.set'; text: string; commandName: string | null }
   | { type: 'composer.insert'; text: string }
   | { type: 'composer.focus' }
   | { type: 'banner.show'; banner: Banner }
   | { type: 'banner.hide' }
-  | ThemeMessage
   | { type: 'messages.add'; message: ChatMessage }
   | { type: 'messages.content'; id: string; content: string }
   | { type: 'messages.status'; id: string; status: MessageStatus; expanderTitle: string }
@@ -264,8 +283,33 @@ export type HostMessage =
   /** Like load, but the page acknowledges with `messages.synced` so the host knows the view converged. */
   | { type: 'messages.sync'; syncId: string; messages: ChatMessage[] };
 
-/** Page -> host. `openFile`, `revert` and `fork` (chat messages) are handled by ChatWebView directly. */
-export type WebMessage =
+/** Host -> page. */
+export type HostMessage = PanelHostMessage | (TabHostMessage & { tab: string });
+
+/** Page -> host, for the whole panel. */
+export type PanelWebMessage =
+  /** The page has loaded: the host answers with the theme and the tabs. */
+  | { type: 'page.ready' }
+  /** The page got the keyboard focus (a click into it): the host makes the chat window VS's active window if it is not. */
+  | { type: 'page.focused' }
+  /** A file path link was clicked in rendered content (path may carry a :line suffix). */
+  | { type: 'openFile'; path: string }
+  /** The tab strip: open a new chat, show a tab (its chat is created the first time), close (delete) one, rename one. */
+  | { type: 'tabs.new' }
+  | { type: 'tabs.activate'; id: string }
+  | { type: 'tabs.close'; id: string }
+  | { type: 'tabs.rename'; id: string; name: string }
+  /** Opens Tools > Options at the ACP Agent settings page. */
+  | { type: 'settings.open' }
+  /** Opens the host's folder picker and shares the chosen folder with the agent. */
+  | { type: 'folders.add' }
+  | { type: 'folders.remove'; path: string }
+  /** Items dropped on the folders chip; the host reads their paths (WebView2 additional objects) and adds the folders among them. */
+  | { type: 'folders.drop' };
+
+/** Page -> host, for one chat (posted through its `Chat`, which adds the `tab`). */
+export type TabWebMessage =
+  /** This chat's view is mounted (again): the host answers with its state, its text and the message snapshot. */
   | { type: 'ready' }
   | { type: 'composer.changed'; text: string; commandName: string | null }
   | { type: 'composer.send'; text: string; commandName: string | null }
@@ -279,13 +323,6 @@ export type WebMessage =
   | { type: 'composer.setModel'; id: string }
   | { type: 'composer.setAutoApprove'; value: boolean }
   | { type: 'composer.toggleActiveContext' }
-  /** Opens the host's folder picker and shares the chosen folder with the agent. */
-  | { type: 'folders.add' }
-  /** Opens Tools > Options at the ACP Agent settings page. */
-  | { type: 'settings.open' }
-  | { type: 'folders.remove'; path: string }
-  /** Items dropped on the folders chip; the host reads their paths (WebView2 additional objects) and adds the folders among them. */
-  | { type: 'folders.drop' }
   | { type: 'changes.acceptAll'; source: PendingSource }
   | { type: 'changes.rejectAll'; source: PendingSource }
   | { type: 'changes.open'; path: string }
@@ -295,12 +332,13 @@ export type WebMessage =
   /** Asks the host to open the URL of the banner with this id (the page never receives a URL to open). */
   | { type: 'banner.openUrl'; id: string }
   | { type: 'messages.synced'; syncId: string }
-  /** A file path link was clicked in rendered content (path may carry a :line suffix). */
-  | { type: 'openFile'; path: string }
   /** "Revert to here" on a user message. */
   | { type: 'revert'; checkpointId: string }
   /** "Fork from here" on a user message or a reply: a new chat continues from there. */
   | { type: 'fork'; messageId: string };
+
+/** Page -> host. */
+export type WebMessage = PanelWebMessage | (TabWebMessage & { tab: string });
 
 export const emptyComposerState: ComposerState = {
   enabled: false,

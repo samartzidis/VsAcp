@@ -4,7 +4,7 @@ import type { FoldersState } from '../bridge/protocol';
 import { CloseIcon, FolderIcon } from './icons';
 
 /**
- * Toolbar chip for the folders shared with the agent besides the solution folder (ACP additionalDirectories):
+ * Panel footer chip for the folders shared with the agent besides the solution folder (ACP additionalDirectories):
  * a count that opens a popover listing them (found in the solution, or added by the user), with remove and
  * "Add folder...". The host owns the list and the folder picker; the page only shows it and posts requests.
  */

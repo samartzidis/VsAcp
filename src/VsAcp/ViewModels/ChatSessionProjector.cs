@@ -6,7 +6,7 @@ using VsAcp.Controls;
 namespace VsAcp.ViewModels;
 
 /// <summary>
-/// Projects <see cref="ChatSession"/> change events onto the <see cref="ChatWebView"/>. This is the
+/// Projects <see cref="ChatSession"/> change events onto its chat in the page (<see cref="ChatTabChannel"/>). This is the
 /// single place the session-to-page mapping lives, so any session mutation renders automatically -
 /// the view-model can no longer mutate state without the UI following. The page asks for the full
 /// snapshot when it starts (<c>ready</c>), so live events never need to be queued while it loads.
@@ -14,7 +14,7 @@ namespace VsAcp.ViewModels;
 public sealed class ChatSessionProjector : IDisposable
 {
     private readonly ChatSession _session;
-    private readonly ChatWebView _webView;
+    private readonly ChatTabChannel _webView;
 
     /// <summary>
     /// Raised when an end-of-turn re-projection could not be confirmed by the page (e.g. the render
@@ -23,7 +23,7 @@ public sealed class ChatSessionProjector : IDisposable
     /// </summary>
     public event Action? RenderFailed;
 
-    public ChatSessionProjector(ChatSession session, ChatWebView webView)
+    public ChatSessionProjector(ChatSession session, ChatTabChannel webView)
     {
         _session = session;
         _webView = webView;

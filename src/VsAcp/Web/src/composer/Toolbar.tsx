@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { post } from '../bridge/host';
 import type { Choice } from '../bridge/protocol';
-import { composer, editor } from '../state';
+import { useChat } from '../chat';
 import { AttachIcon, ChevronIcon, ClaudeLogo, CursorLogo, FileIcon, SendIcon, ShieldIcon, StopIcon } from './icons';
 import { SessionFolders } from './SessionFolders';
 
@@ -50,7 +49,9 @@ function Dropdown(props: { items: Choice[]; selectedId: string | null; title: st
 }
 
 export function Toolbar() {
-  const s = composer.value;
+  const chat = useChat();
+  const post = chat.post;
+  const s = chat.composer.value;
   return (
     <div class="toolbar">
       <div class="tb-left">
@@ -102,7 +103,7 @@ export function Toolbar() {
             class="tb-btn send"
             title="Send (Enter)"
             onClick={() => {
-              const ctrl = editor.current;
+              const ctrl = chat.editor.current;
               post({ type: 'composer.send', text: ctrl?.text ?? '', commandName: ctrl?.commandName ?? null });
               ctrl?.focus();
             }}

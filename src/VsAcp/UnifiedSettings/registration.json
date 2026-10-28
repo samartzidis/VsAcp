@@ -35,7 +35,7 @@
     "acpAgent.enableChatDevTools": {
       "type": "boolean",
       "title": "Enable chat DevTools",
-      "description": "Right-clicking the chat panel shows 'Inspect' to open the WebView2 developer tools (for chat tabs opened after the change). Disable in production.",
+      "description": "Right-clicking the chat panel shows 'Inspect' to open the WebView2 developer tools (after Visual Studio restarts). Disable in production.",
       "default": false,
       "order": 4
     },

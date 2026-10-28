@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import type { Banner, RevertGroup } from '../bridge/protocol';
 import { ChevronIcon } from '../composer/icons';
-import { resolveBanner } from './resolve';
+import { useResolveBanner } from './resolve';
 import { BannerCard, BannerFooter, WarningIcon } from './card';
 
 const LABEL: Record<RevertGroup['files'][number]['action'], string> = { delete: 'DELETE', overwrite: 'OVERWRITE', recreate: 'RECREATE' };
@@ -39,6 +39,7 @@ function FileList({ group }: { group: RevertGroup }) {
  * revert other changes" is ticked. Cancel is focused, so Enter / Esc are safe.
  */
 export function RevertBanner({ banner }: { banner: Extract<Banner, { kind: 'revert' }> }) {
+  const resolveBanner = useResolveBanner();
   const preview = banner.preview;
   const [includeOther, setIncludeOther] = useState(false);
   const [otherOpen, setOtherOpen] = useState(false);

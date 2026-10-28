@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,9 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Microsoft.Web.WebView2.Core;
-using VsAcp.Core.Abstractions;
 using VsAcp.Core.Diagnostics;
-using VsAcp.ViewModels;
 
 namespace VsAcp.Controls;
 
@@ -23,49 +20,32 @@ public partial class ChatWebView : UserControl
     public static event Action<string>? FileOpenRequested;
 
     /// <summary>
-    /// Raised when the user clicks "Revert to here" on a user message bubble of this page.
-    /// The string argument is the checkpointId stored on the message. Per instance: a static event made
-    /// every open tab revert (and wipe its own history) on any tab's click.
+    /// Raised for the panel's own page messages (the tab strip, the settings button, the shared folders; see
+    /// <c>PanelWebMessage</c> in Web/src/bridge/protocol.ts), with the paths of dropped items for <c>folders.drop</c>.
     /// </summary>
-    public event Action<string>? RevertRequested;
+    public event Action<string, JsonElement, string[]>? PanelMessage;
 
-    /// <summary>
-    /// Raised when the user clicks "Fork from here" on a message of this page, with the message's id.
-    /// </summary>
-    public event Action<string>? ForkRequested;
-
-    /// <summary>
-    /// Raised for page messages other than the chat-message ones above (<c>openFile</c>, <c>revert</c>, <c>fork</c>):
-    /// the composer protocol (see Web/src/bridge/protocol.ts). Per instance, so each tab only sees its own page.
-    /// </summary>
-    public event Action<string, JsonElement>? BridgeMessage;
-
-    /// <summary>
-    /// Raised when files are dropped on the page. The paths come from WebView2's additional objects;
-    /// an empty array means the drag carried no files (e.g. Solution Explorer items).
-    /// </summary>
-    public event Action<string[]>? FilesDropped;
-
-    /// <summary>
-    /// Raised when items are dropped on the shared-folders chip. Same source and meaning as
-    /// <see cref="FilesDropped"/>; the receiver keeps the entries that are folders.
-    /// </summary>
-    public event Action<string[]>? FoldersDropped;
+    /// <summary>Raised when the page has (re)loaded and asked for its state: the panel answers with its own.</summary>
+    public event Action? PageReady;
 
     /// <summary>
     /// Set by <c>VsAcpPackage</c> from the <c>VsAcpSettings.EnableChatDevTools</c> setting (startup and on change).
-    /// When true, the WebView2 context menu and DevTools are enabled for diagnostics (for pages created after the
-    /// change). Page logging does not depend on it.
+    /// When true, the WebView2 context menu and DevTools are enabled for diagnostics (read when the page is created,
+    /// so a change applies after Visual Studio restarts). Page logging does not depend on it.
     /// </summary>
     public static bool DevToolsEnabled { get; set; }
 
-    /// <summary>Names this tab in page log lines (the chat's session id); set before the page loads.</summary>
-    public string LogTag { get; set; } = "?";
+    /// <summary>Names the page in log lines that belong to no chat.</summary>
+    public string LogTag { get; set; } = "panel";
 
     private readonly PageLogLimiter _pageLogLimiter = new();
     private bool _initialized;
     private bool _pageReady;
     private bool _navigated;
+    // The chats this page shows (one per open tab), and the tab list as last set: the page creates a chat view for each
+    // open tab (see Web/src/panel.ts).
+    private readonly List<ChatTabChannel> _tabs = new();
+    private string? _tabsJson;
 
     public ChatWebView()
     {
@@ -218,61 +198,42 @@ public partial class ChatWebView : UserControl
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             var type = root.GetProperty("type").GetString();
+            var tab = root.TryGetProperty("tab", out var tabProp) ? tabProp.GetString() : null;
             // Shows what the page sent and when (e.g. whether a Stop click arrived); the per-keystroke one is left out.
             if (type != "composer.changed")
-                Serilog.Log.Debug("[ChatWebView {Tab:l}] Page sent {Type:l}", LogTag, type);
+                Serilog.Log.Debug("[ChatWebView {Tab:l}] Page sent {Type:l}", tab ?? LogTag, type);
+            if (type is null) return;
 
-            if (type == "openFile")
+            if (tab is not null)
             {
-                var path = root.GetProperty("path").GetString();
-                if (!string.IsNullOrEmpty(path))
-                    FileOpenRequested?.Invoke(path!);
-            }
-            else if (type == "revert")
-            {
-                var checkpointId = root.GetProperty("checkpointId").GetString();
-                if (!string.IsNullOrEmpty(checkpointId))
-                    RevertRequested?.Invoke(checkpointId!);
-            }
-            else if (type == "fork")
-            {
-                var messageId = root.GetProperty("messageId").GetString();
-                if (!string.IsNullOrEmpty(messageId))
-                    ForkRequested?.Invoke(messageId!);
-            }
-            else if (type == "banner.resolve")
-            {
-                OnBannerResolved(root);
-            }
-            else if (type == "banner.openUrl")
-            {
-                OnBannerOpenUrl(root);
-            }
-            else if (type == "messages.synced")
-            {
-                var syncId = root.TryGetProperty("syncId", out var sid) ? sid.GetString() : null;
-                if (syncId is not null && _syncs.TryGetValue(syncId, out var pending)) pending.TrySetResult(true);
-            }
-            else if (type == "composer.drop" || type == "folders.drop")
-            {
-                var paths = e.AdditionalObjects?.OfType<CoreWebView2File>()
-                    .Select(f => f.Path)
-                    .Where(p => !string.IsNullOrEmpty(p))
-                    .ToArray() ?? Array.Empty<string>();
-                if (type == "folders.drop") FoldersDropped?.Invoke(paths);
-                else FilesDropped?.Invoke(paths);
-            }
-            else if (type is not null)
-            {
-                if (type == "ready")
+                if (_tabs.FirstOrDefault(t => t.TabId == tab) is not { } channel)
                 {
-                    // A (re)loaded page starts empty: give it the theme and the banner that is waiting, if any;
-                    // the composer and the message list answer the same message with their own state.
-                    _pageReady = true;
-                    if (_themeJson is { } theme) PostBridgeJson(theme);
-                    if (_activeBanner is { } waiting) PostBridgeJson(waiting.Json);
+                    Serilog.Log.Warning("[ChatWebView] Page sent {Type:l} for tab {Tab:l}, which is not open here", type, tab);
+                    return;
                 }
-                BridgeMessage?.Invoke(type, root);
+
+                channel.Receive(type, root, DroppedPaths(type, e));
+                return;
+            }
+
+            switch (type)
+            {
+                case "page.ready":
+                    // A (re)loaded page starts empty: give it the theme and the tabs; each open tab's view then asks
+                    // for its own state.
+                    _pageReady = true;
+                    if (_themeJson is { } theme) PostJson(theme);
+                    if (_tabsJson is { } tabs) PostJson(tabs);
+                    PageReady?.Invoke();
+                    break;
+                case "openFile":
+                    var path = root.GetProperty("path").GetString();
+                    if (!string.IsNullOrEmpty(path))
+                        FileOpenRequested?.Invoke(path!);
+                    break;
+                default:
+                    PanelMessage?.Invoke(type, root, DroppedPaths(type, e));
+                    break;
             }
         }
         catch (Exception ex)
@@ -282,15 +243,49 @@ public partial class ChatWebView : UserControl
         }
     }
 
+    // The paths of the items dropped with a drop message (WebView2 additional objects); none for other messages, and
+    // none when the drag carried no files (e.g. Solution Explorer items).
+    private static string[] DroppedPaths(string type, CoreWebView2WebMessageReceivedEventArgs e) =>
+        type is "composer.drop" or "folders.drop"
+            ? e.AdditionalObjects?.OfType<CoreWebView2File>()
+                .Select(f => f.Path)
+                .Where(p => !string.IsNullOrEmpty(p))
+                .ToArray() ?? Array.Empty<string>()
+            : Array.Empty<string>();
+
     // --- Public API ---
 
-    /// <summary>True once the page has mounted and asked for its initial state (it posts <c>ready</c>).</summary>
+    /// <summary>The page has loaded and asked for its state.</summary>
     public bool IsPageReady => _pageReady;
 
-    /// <summary>Posts a protocol message to the page. Dropped until WebView2 has been created.</summary>
-    public void PostBridgeMessage(object message) => PostBridgeJson(Bridge.BridgeJson.Serialize(message));
+    /// <summary>
+    /// Gives a chat its half of the page, before its tab is listed as open (<see cref="SetTabs"/>): once it is, the
+    /// page creates the chat's view, and the view asks for its state (<c>ready</c>), which the chat's composer and
+    /// message list answer.
+    /// </summary>
+    public ChatTabChannel OpenTab(string tabId)
+    {
+        if (_tabs.FirstOrDefault(t => t.TabId == tabId) is { } existing) return existing;
 
-    public void PostBridgeJson(string json)
+        var channel = new ChatTabChannel(this, tabId);
+        _tabs.Add(channel);
+        return channel;
+    }
+
+    /// <summary>Takes a chat out of the page: messages for it are ignored from now on.</summary>
+    public void CloseTab(string tabId) => _tabs.RemoveAll(t => t.TabId == tabId);
+
+    /// <summary>
+    /// The tab strip, in order (Web/src/bridge/protocol.ts TabInfo). Sent now, and again when the page (re)loads.
+    /// </summary>
+    public void SetTabs(IEnumerable<object> tabs)
+    {
+        _tabsJson = Bridge.BridgeJson.Serialize(new { type = "tabs", tabs = tabs.ToList() });
+        if (_pageReady) PostJson(_tabsJson);
+    }
+
+    /// <summary>Posts a serialized protocol message to the page. Dropped until WebView2 has been created.</summary>
+    internal void PostJson(string json)
     {
         try
         {
@@ -299,69 +294,6 @@ public partial class ChatWebView : UserControl
         catch (Exception ex)
         {
             Serilog.Log.Warning(ex, "[ChatWebView] Failed to post bridge message");
-        }
-    }
-
-    // The message list. Live updates are fire-and-forget; the page asks for the full session snapshot when
-    // it starts (the projector answers `ready` with LoadMessages), so nothing needs to be queued while it loads.
-
-    public void AddMessage(ChatMessageData message) =>
-        PostBridgeMessage(new { type = "messages.add", message });
-
-    public void UpdateContent(string id, string content) =>
-        PostBridgeMessage(new { type = "messages.content", id, content });
-
-    public void UpdateStatus(string id, OutputItemStatus status, string expanderTitle) =>
-        PostBridgeMessage(new { type = "messages.status", id, status = status.ToString(), expanderTitle });
-
-    public void SetBody(string id, string body, OutputBodyMode bodyMode, string? language = null) =>
-        PostBridgeMessage(new { type = "messages.body", id, body, bodyMode = bodyMode.ToString(), language });
-
-    public void CompleteMessage(string id) =>
-        PostBridgeMessage(new { type = "messages.complete", id });
-
-    public void ClearMessages() =>
-        PostBridgeMessage(new { type = "messages.clear" });
-
-    /// <summary>Replaces the whole list with these messages.</summary>
-    public void LoadMessages(IEnumerable<ChatMessageData> messages) =>
-        PostBridgeMessage(new { type = "messages.load", messages = messages.ToList() });
-
-    private static readonly TimeSpan SyncAckTimeout = TimeSpan.FromSeconds(5);
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<bool>> _syncs = new();
-
-    /// <summary>
-    /// Reconciles the page against the full message snapshot (end-of-turn self-heal) and waits for the page
-    /// to confirm it applied it. Live updates are fire-and-forget, so a lost one could leave a message missing
-    /// or stale while the model and disk stay correct; re-sending the snapshot converges the view without a
-    /// flicker. Returns false when the page did not confirm in time, so the caller can escalate. Returns true
-    /// (no-op) while the page is not up yet: it asks for the snapshot itself once it is.
-    /// </summary>
-    public async Task<bool> SyncMessagesAsync(IEnumerable<ChatMessageData> messages)
-    {
-        if (!_pageReady) return true;
-
-        var syncId = Guid.NewGuid().ToString("N");
-        var ack = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _syncs[syncId] = ack;
-        try
-        {
-            var list = messages.ToList();
-            var clock = System.Diagnostics.Stopwatch.StartNew();
-            PostBridgeMessage(new { type = "messages.sync", syncId, messages = list });
-            Serilog.Log.Debug("[ChatWebView {Tab:l}] Sync {SyncId:l} sent ({Count} messages)", LogTag, syncId, list.Count);
-            if (await Task.WhenAny(ack.Task, Task.Delay(SyncAckTimeout)) == ack.Task)
-            {
-                Serilog.Log.Debug("[ChatWebView {Tab:l}] Sync {SyncId:l} confirmed after {Ms} ms", LogTag, syncId, clock.ElapsedMilliseconds);
-                return true;
-            }
-
-            Serilog.Log.Warning("[ChatWebView] The page did not confirm the message sync within {Seconds}s", SyncAckTimeout.TotalSeconds);
-            return false;
-        }
-        finally
-        {
-            _syncs.TryRemove(syncId, out _);
         }
     }
 
@@ -374,7 +306,7 @@ public partial class ChatWebView : UserControl
     public void SetTheme(Dictionary<string, string> colors, bool isLight, bool highContrast)
     {
         _themeJson = Bridge.BridgeJson.Serialize(new { type = "theme", colors, scheme = isLight ? "light" : "dark", highContrast });
-        PostBridgeJson(_themeJson);
+        PostJson(_themeJson);
     }
 
     public void SetChromeBackground(Color color)
@@ -400,101 +332,5 @@ public partial class ChatWebView : UserControl
 
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }
         catch (Exception ex) { Serilog.Log.Warning(ex, "[ChatWebView] failed to open {Url}", url); }
-    }
-
-    // ── Banners (rendered by the page; see Web/src/banners) ──────────────
-
-    /// <summary>The banner the page is currently showing, kept so it can be re-sent if the page reloads.</summary>
-    private sealed record ActiveBanner(string Id, string Json, string? Url, Action<JsonElement> Resolve);
-
-    private ActiveBanner? _activeBanner;
-
-    /// <summary>
-    /// Shows <paramref name="build"/>'s banner, replacing any banner currently shown (the replaced one's
-    /// callback is never invoked, as before). <paramref name="onResolved"/> runs once with the page's answer.
-    /// </summary>
-    private void ShowBanner(Func<string, object> build, string? url, Action<JsonElement> onResolved)
-    {
-        UiThread.Send(() =>
-        {
-            var id = Guid.NewGuid().ToString("N");
-            var json = Bridge.BridgeJson.Serialize(Bridge.BannerMessages.Show(build(id)));
-            _activeBanner = new ActiveBanner(id, json, url, onResolved);
-            PostBridgeJson(json);
-        });
-    }
-
-    /// <summary>
-    /// Show the permission banner for a request from the ACP agent. The
-    /// supplied callback is invoked once when the user selects an option.
-    /// Replaces any banner currently shown.
-    /// </summary>
-    public void ShowPermissionBanner(AcpPermissionRequest request, Action<string?> onResolved) =>
-        ShowBanner(id => Bridge.BannerMessages.Permission(id, request), null,
-            result => onResolved(Bridge.BannerMessages.ParsePermission(result)));
-
-    /// <summary>
-    /// Show the inline "Revert to here" confirmation: the agent's files, and the other changes with an
-    /// "Also revert other changes" checkbox. <paramref name="onResolved"/> is invoked once with the answer
-    /// (Revert or Cancel, and the checkbox). Replaces any banner currently shown.
-    /// </summary>
-    internal void ShowRevertConfirmBanner(VsAcp.Core.Services.RevertPreview? preview, Action<Bridge.RevertAnswer> onResolved) =>
-        ShowBanner(id => Bridge.BannerMessages.Revert(id, preview), null,
-            result => onResolved(Bridge.BannerMessages.ParseRevert(result)));
-
-    /// <summary>
-    /// Show a form or URL elicitation from the ACP agent. The callback is invoked once with the user's
-    /// answer. Replaces any banner currently shown.
-    /// </summary>
-    public void ShowElicitationBanner(AcpElicitationRequest request, Action<AcpElicitationResult> onResolved) =>
-        ShowBanner(id => Bridge.BannerMessages.Elicitation(id, request), request.IsUrlMode ? request.Url : null,
-            result => onResolved(Bridge.BannerMessages.ParseElicitation(result)));
-
-    /// <summary>
-    /// Shows an error banner used to escalate a failed chat re-projection. It is a separate banner kind
-    /// (not part of the message DOM the projector renders), so it still shows when message rendering is
-    /// what failed. <paramref name="onReload"/> runs when the user clicks "Reload view".
-    /// </summary>
-    public void ShowErrorBanner(string message, Action onReload) =>
-        ShowBanner(id => Bridge.BannerMessages.Error(id, message), null, _ => onReload());
-
-    public void HideBanner()
-    {
-        UiThread.Send(() =>
-        {
-            _activeBanner = null;
-            PostBridgeMessage(new { type = "banner.hide" });
-        });
-    }
-
-    /// <summary>The page answered a banner. Answers for a banner that was since replaced or hidden are ignored.</summary>
-    private void OnBannerResolved(JsonElement message)
-    {
-        var id = message.TryGetProperty("id", out var idProp) ? idProp.GetString() : null;
-        if (_activeBanner is not { } active || active.Id != id) return;
-
-        // Take it down before running the callback: the callback may show the next banner straight away.
-        _activeBanner = null;
-        PostBridgeMessage(new { type = "banner.hide" });
-        active.Resolve(message.TryGetProperty("result", out var result) ? result : default);
-    }
-
-    /// <summary>
-    /// The page asks to open the URL of an elicitation. The page never supplies the URL (it comes from the
-    /// agent), only the banner id, and only web links are opened.
-    /// </summary>
-    private void OnBannerOpenUrl(JsonElement message)
-    {
-        var id = message.TryGetProperty("id", out var idProp) ? idProp.GetString() : null;
-        if (_activeBanner is not { Url: { } url } active || active.Id != id) return;
-
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-        {
-            Serilog.Log.Warning("[Elicitation] Refusing to open non-web URL {Url}", url);
-            return;
-        }
-
-        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }
-        catch (Exception ex) { Serilog.Log.Warning(ex, "[Elicitation] failed to open {Url}", url); }
     }
 }

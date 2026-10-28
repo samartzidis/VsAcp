@@ -1,12 +1,9 @@
 import { useEffect, useReducer, useRef } from 'preact/hooks';
-import { post } from '../bridge/host';
 import type { SlashCommand } from '../bridge/protocol';
-import { composer, editor } from '../state';
+import { useChat } from '../chat';
 import { Attachments } from './Attachments';
 import { EditorController } from './editorDom';
 import { filterCommands, moveIndex } from './editorModel';
-import { FoldersMenu } from './FoldersMenu';
-import { CogIcon } from './icons';
 import { SlashPopup } from './SlashPopup';
 import { Toolbar } from './Toolbar';
 
@@ -15,6 +12,7 @@ const OWN_POINTER_HANDLING =
   '.editor, button, a, input, select, textarea, label, [tabindex], [role="listbox"], [role="option"], [role="dialog"]';
 
 export function Composer() {
+  const { composer, editor, post } = useChat();
   const s = composer.value;
   const rootRef = useRef<HTMLDivElement>(null);
   const ctrlRef = useRef<EditorController | null>(null);
@@ -165,19 +163,6 @@ export function Composer() {
           />
         </div>
         <Toolbar />
-      </div>
-      {/* Outside the box on purpose: the shared folders and the settings belong to the whole solution, not to this message. */}
-      <div class="composer-footer">
-        <button
-          type="button"
-          class="ctx-btn settings-btn"
-          title="Open the ACP Agent settings"
-          aria-label="Open the ACP Agent settings"
-          onClick={() => post({ type: 'settings.open' })}
-        >
-          <CogIcon />
-        </button>
-        {s.folders && <FoldersMenu folders={s.folders} />}
       </div>
     </div>
   );

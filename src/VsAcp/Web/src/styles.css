@@ -1,10 +1,134 @@
 /* Chat UI below the message list. Colours come from the CSS variables the host sets from the VS theme
-   (ChatSessionControl.ApplyThemeColors -> setThemeColors); the fallbacks only matter in the dev harness. */
+   (TabbedChatControl.ApplyThemeColors -> applyTheme); the fallbacks only matter in the dev harness. */
 
-/* #spa-root is a flex column (set by the template): the message list takes what is left and every other
-   row keeps its natural height. */
-#spa-root > :not(.message-list) {
+/* #spa-root is a flex column (set by the template): the tab strip, the chat area and the footer. The chat area holds
+   one chat view per open tab, of which only the active one is shown. A chat view is a flex column too: the message
+   list takes what is left and every other row keeps its natural height. */
+.chat-area,
+.chat-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.chat-view[hidden] {
+  display: none;
+}
+
+.chat-view > :not(.message-list),
+#spa-root > :not(.chat-area) {
   flex: none;
+}
+
+/* ---- tab strip (as the tool window's WPF strip drew it) ----
+   The line between the strip and the chats is drawn behind the tabs (an inset shadow): inactive tabs are transparent
+   so it shows under them, the active tab's opaque background covers it, so the tab merges with the chat below. */
+.tab-strip {
+  display: flex;
+  align-items: flex-end;
+  padding: 4px 0 0 4px;
+  background: var(--strip-bg, var(--bg-secondary));
+  box-shadow: inset 0 -1px 0 var(--strip-border, var(--border));
+  user-select: none;
+}
+
+.tab-list {
+  display: flex;
+  align-items: flex-end;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 6px;
+  padding: 5px 6px 5px 10px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  font-size: 12px;
+  cursor: default;
+}
+
+.tab:not(.active) .tab-name {
+  opacity: 0.6;
+}
+
+.tab:not(.active):hover {
+  background: var(--hover);
+}
+
+.tab:not(.active):hover .tab-name {
+  opacity: 1;
+}
+
+.tab.active {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  border-color: var(--strip-border, var(--border));
+  background: var(--bg-primary);
+}
+
+.tab-name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* only on the active tab and the one under the pointer, as in the VS editor */
+.tab-close {
+  visibility: hidden;
+  padding: 1px 3px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.tab.active .tab-close,
+.tab:hover .tab-close {
+  visibility: visible;
+}
+
+.tab-close:hover {
+  background: var(--pressed);
+  color: var(--text-primary);
+}
+
+.tab-new {
+  flex: none;
+  align-self: center;
+  padding: 0 8px 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.tab-new:hover {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
+.tab-rename {
+  min-width: 120px;
+  max-width: 150px;
+  padding: 0 3px;
+  border: 1px solid var(--accent);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: inherit;
+  outline: none;
 }
 
 #spa-root {
@@ -263,7 +387,7 @@
 /* ---- composer ---- */
 
 .composer {
-  padding: 8px 10px 10px;
+  padding: 8px 10px 4px;
 }
 
 .composer-box {
@@ -591,12 +715,12 @@
 
 /* ---- shared extra folders chip + popover ---- */
 
-/* a slim row under the composer box: the folders are shared by the whole solution, not by one message */
-.composer-footer {
+/* a slim row under the chats: the settings and the folders belong to the whole solution, not to one chat */
+.panel-footer {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 2px 0;
+  padding: 0 12px 10px;
 }
 
 .folders-btn {

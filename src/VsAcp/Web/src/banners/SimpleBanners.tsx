@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import type { Banner } from '../bridge/protocol';
-import { resolveBanner } from './resolve';
+import { useResolveBanner } from './resolve';
 import { BannerCard, BannerFooter, OptionList, WarningIcon, letterIndex, type Choice } from './card';
 import { ShieldIcon } from '../composer/icons';
 
@@ -20,6 +20,7 @@ const isReject = (kind: string) => kind.toLowerCase().startsWith('reject');
  * Enter alone never answers a permission prompt.
  */
 export function PermissionBanner({ banner }: { banner: Of<'permission'> }) {
+  const resolveBanner = useResolveBanner();
   const [selected, setSelected] = useState<string | null>(null);
   const options = banner.options;
   const answer = (optionId: string) => resolveBanner(banner.id, { optionId });
@@ -88,6 +89,7 @@ export function PermissionBanner({ banner }: { banner: Of<'permission'> }) {
 
 /** The chat view could not be updated; reloading rebuilds it from the session (no data is touched). */
 export function ErrorBanner({ banner }: { banner: Of<'error'> }) {
+  const resolveBanner = useResolveBanner();
   const reload = () => resolveBanner(banner.id, {});
   return (
     <BannerCard

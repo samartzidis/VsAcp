@@ -1,18 +1,27 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { render } from 'preact';
 import { Attachments } from '../src/composer/Attachments';
-import { composer } from '../src/state';
+import { ChatContext, createChat, type Chat } from '../src/chat';
 import { emptyComposerState } from '../src/bridge/protocol';
+
+// the chat the component is mounted in, fresh per test
+let chat: Chat = createChat('tab-1');
+const composer = { set value(state: typeof emptyComposerState) { chat.composer.value = state; } };
 
 function mountAttachments(): HTMLDivElement {
   const container = document.createElement('div');
   document.body.appendChild(container);
-  render(<Attachments />, container);
+  render(
+    <ChatContext.Provider value={chat}>
+      <Attachments />
+    </ChatContext.Provider>,
+    container,
+  );
   return container;
 }
 
 afterEach(() => {
-  composer.value = emptyComposerState;
+  chat = createChat('tab-1');
   document.body.innerHTML = '';
   delete (window as { chrome?: unknown }).chrome;
 });
@@ -59,6 +68,6 @@ describe('Attachments', () => {
     removeBtn.click();
 
     expect(postMessage).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(postMessage.mock.calls[0]![0])).toEqual({ type: 'composer.remove', kind: 'folder', id: 'd1' });
+    expect(JSON.parse(postMessage.mock.calls[0]![0])).toEqual({ type: 'composer.remove', kind: 'folder', id: 'd1', tab: 'tab-1' });
   });
 });

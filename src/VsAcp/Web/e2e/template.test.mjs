@@ -37,10 +37,20 @@ beforeEach(async () => {
   await page.addInitScript(() => {
     const listeners = [];
     window.__sent = [];
-    window.__deliver = (m) => listeners.forEach((l) => l({ data: m }));
+    // like the host: a per-tab message the test sends without a tab is for the one open tab
+    window.__deliver = (m) => {
+      const data = m.type === 'theme' || m.type === 'tabs' || m.tab ? m : { ...m, tab: 't1' };
+      listeners.forEach((l) => l({ data }));
+    };
     window.chrome = {
       webview: {
-        postMessage: (json) => window.__sent.push(JSON.parse(json)),
+        postMessage: (json) => {
+          const m = JSON.parse(json);
+          window.__sent.push(m);
+          // the page has loaded: open one tab, as the host does
+          if (m.type === 'page.ready')
+            queueMicrotask(() => window.__deliver({ type: 'tabs', tabs: [{ id: 't1', name: 'Chat 1', active: true, open: true }] }));
+        },
         postMessageWithAdditionalObjects: () => {},
         addEventListener: (_t, l) => listeners.push(l),
       },
@@ -84,7 +94,7 @@ describe('the shipping page', () => {
     await page.waitForSelector('#msg-a pre code.hljs');
   });
 
-  test('layout: the message list fills the page and the composer sits at the bottom', async () => {
+  test('layout: the tab strip on top, the message list fills the page, the composer and the footer at the bottom', async () => {
     await deliver({ type: 'state', state: { enabled: true, placeholder: 'Ask', canSend: true, busy: false, images: [], files: [], selections: [],
       activeContext: null, commands: [], modes: [], modeId: null, models: [], modelId: null, autoApprove: false, usage: null, pendingFiles: [] } });
     const many = Array.from({ length: 40 }, (_, i) => message({ id: `m${i}`, type: 'User', content: `line ${i}\n`.repeat(5) }));
@@ -96,9 +106,12 @@ describe('the shipping page', () => {
 
     const box = await page.evaluate(() => {
       const r = (s) => document.querySelector(s).getBoundingClientRect();
-      return { list: r('.message-list'), composer: r('.composer'), viewport: window.innerHeight };
+      return { strip: r('.tab-strip'), list: r('.message-list'), composer: r('.composer'), footer: r('.panel-footer'), viewport: window.innerHeight };
     });
-    assert.ok(Math.abs(box.composer.bottom - box.viewport) < 2, 'composer is pinned to the bottom edge');
+    assert.ok(Math.abs(box.strip.top) < 2, 'the tab strip is at the top edge');
+    assert.ok(Math.abs(box.list.top - box.strip.bottom) < 2, 'the list starts under the tab strip');
+    assert.ok(Math.abs(box.footer.bottom - box.viewport) < 2, 'the footer is pinned to the bottom edge');
+    assert.ok(Math.abs(box.composer.bottom - box.footer.top) < 2, 'the composer sits right above the footer');
     assert.ok(Math.abs(box.list.bottom - box.composer.top) < 2, 'the list ends where the composer starts');
     assert.ok(box.list.height > 200, 'the list gets the remaining height');
     assert.equal(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight), true, 'the page itself never scrolls');
@@ -112,10 +125,10 @@ describe('the shipping page', () => {
     const after = await page.evaluate(() => ({
       list: document.querySelector('.message-list').getBoundingClientRect().height,
       composerBottom: document.querySelector('.composer').getBoundingClientRect().bottom,
-      viewport: window.innerHeight,
+      footerTop: document.querySelector('.panel-footer').getBoundingClientRect().top,
     }));
     assert.ok(after.list < before, 'the list shrinks');
-    assert.ok(Math.abs(after.composerBottom - after.viewport) < 2, 'the composer stays at the bottom');
+    assert.ok(Math.abs(after.composerBottom - after.footerTop) < 2, 'the composer stays at the bottom, on the footer');
   });
 
   test('host theme variables reach the page and restyle it', async () => {

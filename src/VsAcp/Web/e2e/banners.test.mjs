@@ -106,7 +106,7 @@ describe('permission and error banners', () => {
     await setState({ busy: true });
     await show(permission);
     const order = await page.evaluate(() =>
-      [...document.querySelector('#spa-root').children].map((c) => c.className.split(' ')[0]),
+      [...document.querySelector('.chat-view').children].map((c) => c.className.split(' ')[0]),
     );
     assert.deepEqual(order.slice(0, 4), ['message-list', 'banner', 'busy-bar', 'composer']);
   });

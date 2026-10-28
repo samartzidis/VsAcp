@@ -12,14 +12,20 @@
     <Icon>Resources\Icon.png</Icon>
     <Tags>ai,acp,claude,cursor</Tags>
   </Metadata>
+  <!--
+    [17.14,) and not [18.10,): the version here is the extensibility API line, which VS 2026 still reports as 17.x, and
+    the Marketplace rejects 18.10 as an experimental API version (ADR-042). The range therefore also admits VS 2022
+    17.14, which is not supported (README: VS 2026 18.10 or later) and lacks Microsoft.Extensions.AI.Abstractions
+    (not shipped, see VsAcp.csproj): there the IDE tools turn themselves off and chats still work.
+  -->
   <Installation>
-    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[18.10,)">
+    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.14,)">
       <ProductArchitecture>amd64</ProductArchitecture>
     </InstallationTarget>
   </Installation>
   <Prerequisites>
     <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor"
-                  Version="[18.10,)"
+                  Version="[17.14,)"
                   DisplayName="Visual Studio core editor" />
   </Prerequisites>
   <Assets>
