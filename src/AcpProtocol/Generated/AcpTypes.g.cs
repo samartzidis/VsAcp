@@ -117,6 +117,15 @@ public record AuthenticateResponse
 [JsonConverter(typeof(AuthMethodJsonConverter))]
 public abstract record AuthMethod;
 
+public record AuthMethodUnknown : AuthMethod
+{
+    [JsonPropertyName("type")]
+    public required string RawType { get; init; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+}
+
 public class AuthMethodJsonConverter : JsonConverter<AuthMethod>
 {
     public override AuthMethod? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -124,13 +133,20 @@ public class AuthMethodJsonConverter : JsonConverter<AuthMethod>
         using var doc = JsonDocument.ParseValue(ref reader);
         var root = doc.RootElement;
 
-        if (root.TryGetProperty("id", out _))
-            return root.Deserialize<AuthMethodTerminal>(options);
+        if (root.TryGetProperty("type", out var discValue))
+        {
+            if (discValue.ValueKind != JsonValueKind.String)
+                throw new JsonException("'type' in AuthMethod must be a string");
 
-        if (root.TryGetProperty("id", out _))
-            return root.Deserialize<AuthMethodAgent>(options);
+            switch (discValue.GetString())
+            {
+                case "terminal": return root.Deserialize<AuthMethodTerminal>(options);
+            }
 
-        throw new JsonException("Unable to determine AuthMethod variant");
+            return root.Deserialize<AuthMethodUnknown>(options);
+        }
+
+        return root.Deserialize<AuthMethodAgent>(options);
     }
 
     public override void Write(Utf8JsonWriter writer, AuthMethod value, JsonSerializerOptions options)
@@ -159,6 +175,9 @@ public record AuthMethodAgent : AuthMethod
 
 public record AuthMethodTerminal : AuthMethod
 {
+    [JsonPropertyName("type")]
+    public string Type => "terminal";
+
     [JsonPropertyName("id")]
     public required string Id { get; init; }
 
@@ -262,6 +281,9 @@ public record BooleanConfigOptionCapabilities
 
 public record BooleanPropertySchema : ElicitationPropertySchema
 {
+    [JsonPropertyName("type")]
+    public string Type => "boolean";
+
     [JsonPropertyName("title")]
     public string? Title { get; init; }
 
@@ -833,6 +855,15 @@ public record ElicitationFormMode
 [JsonConverter(typeof(ElicitationPropertySchemaJsonConverter))]
 public abstract record ElicitationPropertySchema;
 
+public record ElicitationPropertySchemaUnknown : ElicitationPropertySchema
+{
+    [JsonPropertyName("type")]
+    public required string RawType { get; init; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+}
+
 public class ElicitationPropertySchemaJsonConverter : JsonConverter<ElicitationPropertySchema>
 {
     public override ElicitationPropertySchema? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -840,8 +871,11 @@ public class ElicitationPropertySchemaJsonConverter : JsonConverter<ElicitationP
         using var doc = JsonDocument.ParseValue(ref reader);
         var root = doc.RootElement;
 
-        if (root.TryGetProperty("type", out var discValue) && discValue.ValueKind == JsonValueKind.String)
+        if (root.TryGetProperty("type", out var discValue))
         {
+            if (discValue.ValueKind != JsonValueKind.String)
+                throw new JsonException("'type' in ElicitationPropertySchema must be a string");
+
             switch (discValue.GetString())
             {
                 case "string": return root.Deserialize<StringPropertySchema>(options);
@@ -850,9 +884,11 @@ public class ElicitationPropertySchemaJsonConverter : JsonConverter<ElicitationP
                 case "boolean": return root.Deserialize<BooleanPropertySchema>(options);
                 case "array": return root.Deserialize<MultiSelectPropertySchema>(options);
             }
+
+            return root.Deserialize<ElicitationPropertySchemaUnknown>(options);
         }
 
-        throw new JsonException($"Unable to determine ElicitationPropertySchema variant from 'type'");
+        throw new JsonException("Missing 'type' in ElicitationPropertySchema");
     }
 
     public override void Write(Utf8JsonWriter writer, ElicitationPropertySchema value, JsonSerializerOptions options)
@@ -1126,6 +1162,9 @@ public record InitializeResponse
 
 public record IntegerPropertySchema : ElicitationPropertySchema
 {
+    [JsonPropertyName("type")]
+    public string Type => "integer";
+
     [JsonPropertyName("title")]
     public string? Title { get; init; }
 
@@ -1283,6 +1322,15 @@ public record McpCapabilities
 [JsonConverter(typeof(McpServerJsonConverter))]
 public abstract record McpServer;
 
+public record McpServerUnknown : McpServer
+{
+    [JsonPropertyName("type")]
+    public required string RawType { get; init; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+}
+
 public class McpServerJsonConverter : JsonConverter<McpServer>
 {
     public override McpServer? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -1290,16 +1338,21 @@ public class McpServerJsonConverter : JsonConverter<McpServer>
         using var doc = JsonDocument.ParseValue(ref reader);
         var root = doc.RootElement;
 
-        if (root.TryGetProperty("name", out _))
-            return root.Deserialize<McpServerHttp>(options);
+        if (root.TryGetProperty("type", out var discValue))
+        {
+            if (discValue.ValueKind != JsonValueKind.String)
+                throw new JsonException("'type' in McpServer must be a string");
 
-        if (root.TryGetProperty("name", out _))
-            return root.Deserialize<McpServerSse>(options);
+            switch (discValue.GetString())
+            {
+                case "http": return root.Deserialize<McpServerHttp>(options);
+                case "sse": return root.Deserialize<McpServerSse>(options);
+            }
 
-        if (root.TryGetProperty("name", out _))
-            return root.Deserialize<McpServerStdio>(options);
+            return root.Deserialize<McpServerUnknown>(options);
+        }
 
-        throw new JsonException("Unable to determine McpServer variant");
+        return root.Deserialize<McpServerStdio>(options);
     }
 
     public override void Write(Utf8JsonWriter writer, McpServer value, JsonSerializerOptions options)
@@ -1310,6 +1363,9 @@ public class McpServerJsonConverter : JsonConverter<McpServer>
 
 public record McpServerHttp : McpServer
 {
+    [JsonPropertyName("type")]
+    public string Type => "http";
+
     [JsonPropertyName("name")]
     public required string Name { get; init; }
 
@@ -1328,6 +1384,9 @@ public record McpServerHttp : McpServer
 
 public record McpServerSse : McpServer
 {
+    [JsonPropertyName("type")]
+    public string Type => "sse";
+
     [JsonPropertyName("name")]
     public required string Name { get; init; }
 
@@ -1368,6 +1427,15 @@ public record McpServerStdio : McpServer
 [JsonConverter(typeof(MultiSelectItemsJsonConverter))]
 public abstract record MultiSelectItems;
 
+public record MultiSelectItemsUnknown : MultiSelectItems
+{
+    [JsonPropertyName("type")]
+    public required string RawType { get; init; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+}
+
 public class MultiSelectItemsJsonConverter : JsonConverter<MultiSelectItems>
 {
     public override MultiSelectItems? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -1375,13 +1443,20 @@ public class MultiSelectItemsJsonConverter : JsonConverter<MultiSelectItems>
         using var doc = JsonDocument.ParseValue(ref reader);
         var root = doc.RootElement;
 
-        if (root.TryGetProperty("enum", out _))
-            return root.Deserialize<StringMultiSelectItems>(options);
+        if (root.TryGetProperty("type", out var discValue))
+        {
+            if (discValue.ValueKind != JsonValueKind.String)
+                throw new JsonException("'type' in MultiSelectItems must be a string");
 
-        if (root.TryGetProperty("anyOf", out _))
-            return root.Deserialize<TitledMultiSelectItems>(options);
+            switch (discValue.GetString())
+            {
+                case "string": return root.Deserialize<StringMultiSelectItems>(options);
+            }
 
-        throw new JsonException("Unable to determine MultiSelectItems variant");
+            return root.Deserialize<MultiSelectItemsUnknown>(options);
+        }
+
+        return root.Deserialize<TitledMultiSelectItems>(options);
     }
 
     public override void Write(Utf8JsonWriter writer, MultiSelectItems value, JsonSerializerOptions options)
@@ -1392,6 +1467,9 @@ public class MultiSelectItemsJsonConverter : JsonConverter<MultiSelectItems>
 
 public record MultiSelectPropertySchema : ElicitationPropertySchema
 {
+    [JsonPropertyName("type")]
+    public string Type => "array";
+
     [JsonPropertyName("title")]
     public string? Title { get; init; }
 
@@ -1490,6 +1568,9 @@ public enum NoticeSeverity
 
 public record NumberPropertySchema : ElicitationPropertySchema
 {
+    [JsonPropertyName("type")]
+    public string Type => "number";
+
     [JsonPropertyName("title")]
     public string? Title { get; init; }
 
@@ -2616,6 +2697,9 @@ public enum StringFormat
 
 public record StringMultiSelectItems : MultiSelectItems
 {
+    [JsonPropertyName("type")]
+    public string Type => "string";
+
     [JsonPropertyName("enum")]
     public required string[] Enum { get; init; }
 
@@ -2628,6 +2712,9 @@ public record StringMultiSelectItems : MultiSelectItems
 
 public record StringPropertySchema : ElicitationPropertySchema
 {
+    [JsonPropertyName("type")]
+    public string Type => "string";
+
     [JsonPropertyName("title")]
     public string? Title { get; init; }
 
@@ -3082,6 +3169,7 @@ public record WriteTextFileResponse
 [JsonSerializable(typeof(AuthenticateRequest))]
 [JsonSerializable(typeof(AuthenticateResponse))]
 [JsonSerializable(typeof(AuthMethod))]
+[JsonSerializable(typeof(AuthMethodUnknown))]
 [JsonSerializable(typeof(AuthMethodAgent))]
 [JsonSerializable(typeof(AuthMethodTerminal))]
 [JsonSerializable(typeof(AvailableCommand))]
@@ -3125,6 +3213,7 @@ public record WriteTextFileResponse
 [JsonSerializable(typeof(ElicitationFormCapabilities))]
 [JsonSerializable(typeof(ElicitationFormMode))]
 [JsonSerializable(typeof(ElicitationPropertySchema))]
+[JsonSerializable(typeof(ElicitationPropertySchemaUnknown))]
 [JsonSerializable(typeof(ElicitationRequestScope))]
 [JsonSerializable(typeof(ElicitationSchema))]
 [JsonSerializable(typeof(ElicitationSchemaType))]
@@ -3153,10 +3242,12 @@ public record WriteTextFileResponse
 [JsonSerializable(typeof(LogoutResponse))]
 [JsonSerializable(typeof(McpCapabilities))]
 [JsonSerializable(typeof(McpServer))]
+[JsonSerializable(typeof(McpServerUnknown))]
 [JsonSerializable(typeof(McpServerHttp))]
 [JsonSerializable(typeof(McpServerSse))]
 [JsonSerializable(typeof(McpServerStdio))]
 [JsonSerializable(typeof(MultiSelectItems))]
+[JsonSerializable(typeof(MultiSelectItemsUnknown))]
 [JsonSerializable(typeof(MultiSelectPropertySchema))]
 [JsonSerializable(typeof(NewSessionRequest))]
 [JsonSerializable(typeof(NewSessionResponse))]
