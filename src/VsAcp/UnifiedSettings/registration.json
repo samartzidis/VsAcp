@@ -15,9 +15,9 @@
       "description": "Executable to launch as the ACP agent process. Leave blank to use the preset's command; a value here overrides it.",
       "default": "",
       "messages": [
-        { "text": "Blank runs: agent", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
-        { "text": "Blank runs: npx", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
-        { "text": "Blank runs: agent (Cursor's)", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
+        { "text": "If blank: agent", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
+        { "text": "If blank: npx", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
+        { "text": "If blank: agent (Cursor's)", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
       ],
       "order": 1
     },
@@ -27,32 +27,83 @@
       "description": "Command-line arguments passed to the agent process. Leave blank to use the preset's arguments; a value here replaces them, so include the preset's own arguments when adding a flag.",
       "default": "",
       "messages": [
-        { "text": "Blank runs: acp", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
-        { "text": "Blank runs: @agentclientprotocol/claude-agent-acp --yes", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
-        { "text": "Blank runs: acp (Cursor's)", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
+        { "text": "If blank: acp", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
+        { "text": "If blank: @agentclientprotocol/claude-agent-acp --yes", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
+        { "text": "If blank: acp (Cursor's)", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
       ],
       "order": 2
+    },
+    "acpAgent.cursorEnvironment": {
+      "type": "array",
+      "title": "Cursor environment variables",
+      "description": "Extra environment variables for the agent process.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "title": "Name", "default": "" },
+          "value": { "type": "string", "title": "Value", "default": "" }
+        }
+      },
+      "default": [],
+      "allowAdditionsAndRemovals": true,
+      "allowItemEditing": true,
+      "visibleWhen": "${config:acpAgent.preset} == 'cursor'",
+      "order": 3
+    },
+    "acpAgent.claudeCodeEnvironment": {
+      "type": "array",
+      "title": "Claude Code environment variables",
+      "description": "Extra environment variables for the agent process.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "title": "Name", "default": "" },
+          "value": { "type": "string", "title": "Value", "default": "" }
+        }
+      },
+      "default": [],
+      "allowAdditionsAndRemovals": true,
+      "allowItemEditing": true,
+      "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'",
+      "order": 4
+    },
+    "acpAgent.customEnvironment": {
+      "type": "array",
+      "title": "Custom agent environment variables",
+      "description": "Extra environment variables for the agent process.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "title": "Name", "default": "" },
+          "value": { "type": "string", "title": "Value", "default": "" }
+        }
+      },
+      "default": [],
+      "allowAdditionsAndRemovals": true,
+      "allowItemEditing": true,
+      "visibleWhen": "${config:acpAgent.preset} == 'custom'",
+      "order": 5
     },
     "acpAgent.enableIdeTools": {
       "type": "boolean",
       "title": "Let the agent read Visual Studio's state",
       "description": "Gives the agent read-only tools for Visual Studio: the Output window panes (Build, Debug, Tests and others, except the VsAcp pane), the open and active documents with the caret and selection, the solution's configuration and startup project, and whether a build or the debugger is running. Output can contain secrets, such as tokens in package-manager output. Applies when an agent next starts a session; the agent must support HTTP MCP servers.",
       "default": false,
-      "order": 3
+      "order": 6
     },
     "acpAgent.enableChatDevTools": {
       "type": "boolean",
       "title": "Enable chat DevTools",
       "description": "Right-clicking the chat panel shows 'Inspect' to open the WebView2 developer tools (after Visual Studio restarts). Disable in production.",
       "default": false,
-      "order": 4
+      "order": 7
     },
     "acpAgent.enableFileLogging": {
       "type": "boolean",
       "title": "Enable file logging",
       "description": "Writes the VsAcp log to %APPDATA%\\VsAcp\\logs (one file per day). The VsAcp pane in the Output window is always on. Takes effect immediately.",
       "default": true,
-      "order": 5
+      "order": 8
     }
   },
   "categories": {

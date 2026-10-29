@@ -3,7 +3,7 @@
                  xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
     <Identity Id="VsAcp.e5729d8a-9504-49b3-8d22-403148238d88"
-              Version="1.0.1"
+              Version="1.0.2"
               Language="en-US"
               Publisher="George Samartzidis" />
     <DisplayName>Visual Studio ACP Agent</DisplayName>

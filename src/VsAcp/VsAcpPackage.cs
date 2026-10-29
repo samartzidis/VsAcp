@@ -182,10 +182,15 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         Controls.ChatWebView.DevToolsEnabled = resolved.EnableChatDevTools;
         _fileLoggingEnabled = resolved.EnableFileLogging;
         _ideToolsEnabled = resolved.EnableIdeTools;
-        Log.Information("[Settings] Preset='{Preset}', AgentCommand='{Cmd}', AgentArguments='{Args}', DevTools={DevTools}, FileLogging={FileLogging}, IdeTools={IdeTools}",
+        Log.Information("[Settings] Preset='{Preset}', AgentCommand='{Cmd}', AgentArguments='{Args}', DevTools={DevTools}, FileLogging={FileLogging}, IdeTools={IdeTools}, Environment={Environment}",
             resolved.Preset, resolved.AgentCommand, resolved.AgentArguments, resolved.EnableChatDevTools, resolved.EnableFileLogging,
-            resolved.EnableIdeTools);
+            resolved.EnableIdeTools, DescribeEnvironment(resolved));
     }
+
+    /// <summary>The variable names of each preset, for the log. Never the values: they may be secrets.</summary>
+    private static string DescribeEnvironment(AgentSettings settings) =>
+        string.Join("; ", new[] { AgentPresets.Cursor, AgentPresets.ClaudeCode, AgentPresets.Custom }
+            .Select(preset => $"{preset}=[{string.Join(", ", settings.EnvironmentOf(preset).Keys)}]"));
 
     /// <summary>
     /// Opens Tools &gt; Options on the ACP Agent page: the Unified Settings UI takes the category moniker
@@ -275,8 +280,8 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         // The preset goes with the command: a saved chat keeps its own (none for chats saved before it was recorded).
         var effectivePreset = savedAgentCommand is null ? options.Preset : savedAgentPreset;
 
-        Log.Information("[Settings] Building tab DI container: AgentCommand='{Cmd}', AgentArguments='{Args}'{Override}",
-            effectiveCommand, effectiveArgs,
+        Log.Information("[Settings] Building tab DI container: AgentCommand='{Cmd}', AgentArguments='{Args}', Environment=[{Names}]{Override}",
+            effectiveCommand, effectiveArgs, string.Join(", ", options.EnvironmentOf(effectivePreset).Keys),
             savedAgentCommand is not null ? " [session-saved]" : "");
 
         services.AddVsAcpServices(o =>
@@ -288,6 +293,8 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
             o.AgentPreset = effectivePreset;
             o.AgentArgs = effectiveArgs
                 .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            // Not saved with the chat (it may hold secrets): a reopened chat gets its own preset's current list.
+            o.AgentEnv = options.EnvironmentOf(effectivePreset).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
         });
 
         // This tab's token for the IDE tools; the container disposes the endpoint with the tab, which revokes it.

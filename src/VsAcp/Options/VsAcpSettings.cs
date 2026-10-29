@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.Utilities.UnifiedSettings;
+using Serilog;
 using VsAcp.Core.Services;
 
 namespace VsAcp.Options;
@@ -18,11 +19,14 @@ internal static class VsAcpSettings
     public const string EnableChatDevToolsMoniker = "acpAgent.enableChatDevTools";
     public const string EnableFileLoggingMoniker = "acpAgent.enableFileLogging";
     public const string EnableIdeToolsMoniker = "acpAgent.enableIdeTools";
+    public const string CursorEnvironmentMoniker = "acpAgent.cursorEnvironment";
+    public const string ClaudeCodeEnvironmentMoniker = "acpAgent.claudeCodeEnvironment";
+    public const string CustomEnvironmentMoniker = "acpAgent.customEnvironment";
 
     public static readonly string[] AllMonikers =
     {
         PresetMoniker, AgentCommandMoniker, AgentArgumentsMoniker, EnableChatDevToolsMoniker, EnableFileLoggingMoniker,
-        EnableIdeToolsMoniker,
+        EnableIdeToolsMoniker, CursorEnvironmentMoniker, ClaudeCodeEnvironmentMoniker, CustomEnvironmentMoniker,
     };
 
     /// <summary>
@@ -40,8 +44,40 @@ internal static class VsAcpSettings
         return new AgentSettings(preset, command, arguments,
             ReadValue(reader, EnableChatDevToolsMoniker, false),
             ReadValue(reader, EnableFileLoggingMoniker, true),
-            ReadValue(reader, EnableIdeToolsMoniker, false));
+            ReadValue(reader, EnableIdeToolsMoniker, false),
+            new Dictionary<string, IReadOnlyDictionary<string, string>>
+            {
+                [AgentPresets.Cursor] = ReadEnvironment(reader, CursorEnvironmentMoniker),
+                [AgentPresets.ClaudeCode] = ReadEnvironment(reader, ClaudeCodeEnvironmentMoniker),
+                [AgentPresets.Custom] = ReadEnvironment(reader, CustomEnvironmentMoniker),
+            });
     }
+
+    /// <summary>A preset's list: one object per row with a "name" and a "value" (the shape registration.json declares).</summary>
+    static Dictionary<string, string> ReadEnvironment(ISettingsReader? reader, string moniker)
+    {
+        if (reader is null)
+            return new Dictionary<string, string>();
+        try
+        {
+            var result = reader.GetArray<IReadOnlyDictionary<string, object>>(moniker);
+            if (result.Outcome != SettingRetrievalOutcome.Success)
+            {
+                Log.Warning("[Settings] Could not read {Moniker}: {Outcome} {Message}", moniker, result.Outcome, result.Message);
+                return new Dictionary<string, string>();
+            }
+            return AgentEnvironment.Build(result.Value.Select(row =>
+                new KeyValuePair<string?, string?>(TextOf(row, "name"), TextOf(row, "value"))));
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[Settings] Could not read {Moniker}", moniker);
+            return new Dictionary<string, string>();
+        }
+    }
+
+    static string? TextOf(IReadOnlyDictionary<string, object> row, string key) =>
+        row.TryGetValue(key, out var value) ? value?.ToString() : null;
 
     static T ReadValue<T>(ISettingsReader? reader, string moniker, T fallback) where T : notnull
     {
@@ -59,9 +95,19 @@ internal static class VsAcpSettings
     }
 }
 
-/// <summary>Effective values of the ACP Agent settings at one point in time.</summary>
+/// <summary>
+/// Effective values of the ACP Agent settings at one point in time. <paramref name="Environment"/> holds every
+/// preset's variables, keyed by preset: a saved chat takes its own preset's, not the selected one's.
+/// </summary>
 internal sealed record AgentSettings(string Preset, string AgentCommand, string AgentArguments, bool EnableChatDevTools,
-    bool EnableFileLogging, bool EnableIdeTools);
+    bool EnableFileLogging, bool EnableIdeTools, IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? Environment = null)
+{
+    /// <summary>The extra environment variables for an agent started from <paramref name="preset"/>; none for an unknown or missing one.</summary>
+    public IReadOnlyDictionary<string, string> EnvironmentOf(string? preset) =>
+        preset is not null && Environment is not null && Environment.TryGetValue(preset, out var variables)
+            ? variables
+            : new Dictionary<string, string>();
+}
 
 /// <summary>
 /// Service identity for Unified Settings' <see cref="ISettingsManager"/>. The documented service type
