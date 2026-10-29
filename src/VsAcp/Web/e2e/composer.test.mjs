@@ -3,7 +3,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { chip, countOf, deliver, editor, lastOf, page, setState } from './harness.mjs';
+import { chip, countOf, deliver, editor, lastOf, page, setPanel, setState } from './harness.mjs';
 
 describe('editor basics', () => {
   test('shows the placeholder until something is typed', async () => {
@@ -306,13 +306,16 @@ describe('toolbar, attachments and status', () => {
     assert.match(await page.locator('.toolbar .ctx-btn').getAttribute('class'), /off/);
   });
 
-  test('settings cog sits first in the footer row, left of the folders chip, and asks the host to open the settings', async () => {
-    await setState({ folders: { items: [], supported: true, canEdit: true } });
-    const order = await page.locator('.composer-footer > *').evaluateAll((els) => els.map((e) => e.className));
+  test('settings cog and log button sit first in the footer row, left of the folders chip, and ask the host to open them', async () => {
+    await setPanel({ folders: { items: [], supported: true, canEdit: true } });
+    const order = await page.locator('.panel-footer > *').evaluateAll((els) => els.map((e) => e.className));
     assert.match(order[0], /settings-btn/);
-    assert.match(order[1], /folders/);
+    assert.match(order[1], /logs-btn/);
+    assert.match(order[2], /folders/);
     await page.locator('.settings-btn').click();
     assert.equal(await countOf('settings.open'), 1);
+    await page.locator('.logs-btn').click();
+    assert.equal(await countOf('logs.open'), 1);
   });
 
   test('pending files list shows the files with their line counts and its actions', async () => {
@@ -450,15 +453,15 @@ describe('shared folders chip', () => {
   });
 
   test('sits on its own row below the input box, not in its toolbar', async () => {
-    await setState({ folders: folders() });
+    await setPanel({ folders: folders() });
     assert.equal(await page.locator('.composer-box .folders-btn').count(), 0);
     const box = await page.locator('.composer-box').boundingBox();
-    const chipBox = await page.locator('.composer-footer .folders-btn').boundingBox();
+    const chipBox = await page.locator('.panel-footer .folders-btn').boundingBox();
     assert.ok(chipBox.y >= box.y + box.height, 'the chip is below the input box');
   });
 
   test('shows the count and lists each folder with its origin', async () => {
-    await setState({ folders: folders() });
+    await setPanel({ folders: folders() });
     assert.equal((await page.locator('.folders-count').innerText()).trim(), '2');
     assert.equal(await page.locator('.folders-pop').count(), 0);
 
@@ -473,7 +476,7 @@ describe('shared folders chip', () => {
   });
 
   test('Add folder and the remove buttons post their requests', async () => {
-    await setState({ folders: folders() });
+    await setPanel({ folders: folders() });
     await page.locator('.folders-btn').click();
 
     await page.getByRole('button', { name: 'Add folder...' }).click();
@@ -484,16 +487,16 @@ describe('shared folders chip', () => {
   });
 
   test('the list follows the host and an empty list explains itself', async () => {
-    await setState({ folders: folders() });
+    await setPanel({ folders: folders() });
     await page.locator('.folders-btn').click();
-    await setState({ folders: folders({ items: [] }) });
+    await setPanel({ folders: folders({ items: [] }) });
     assert.equal(await page.locator('.folders-row').count(), 0);
     assert.match(await page.locator('.folders-empty').innerText(), /solution folder is always shared/);
     assert.equal((await page.locator('.folders-count').innerText()).trim(), '0');
   });
 
   test('warns when the agent does not support extra folders', async () => {
-    await setState({ folders: folders({ supported: false }) });
+    await setPanel({ folders: folders({ supported: false }) });
     assert.match(await page.locator('.folders-btn').getAttribute('class'), /warn/);
     assert.match(await page.locator('.folders-btn').getAttribute('title'), /does not support/);
     await page.locator('.folders-btn').click();
@@ -501,22 +504,22 @@ describe('shared folders chip', () => {
   });
 
   test('is read-only when changes cannot be saved', async () => {
-    await setState({ folders: folders({ canEdit: false }) });
+    await setPanel({ folders: folders({ canEdit: false }) });
     await page.locator('.folders-btn').click();
     assert.equal(await page.getByRole('button', { name: 'Add folder...' }).count(), 0);
     assert.equal(await page.locator('.folders-x').count(), 0);
   });
 
   test('Escape and a click elsewhere close the popover', async () => {
-    await setState({ folders: folders() });
+    await setPanel({ folders: folders() });
     await page.locator('.folders-btn').click();
     assert.equal(await page.locator('.folders-pop').count(), 1);
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('.folders-pop').count(), 0);
 
     await page.locator('.folders-btn').click();
-    // the popover opens over the editor, so click the top of the page (message list area) instead
-    await page.mouse.click(5, 5);
+    // the popover opens over the editor, so click the message list instead
+    await page.locator('.message-list').click({ position: { x: 5, y: 5 } });
     assert.equal(await page.locator('.folders-pop').count(), 0);
   });
 });
@@ -525,7 +528,7 @@ describe('pressing a bare part of the composer box', () => {
   test('puts the focus in the input', async () => {
     await editor().click();
     await page.keyboard.type('hello');
-    await page.mouse.click(5, 5); // the message list: the input loses the focus
+    await page.locator('.message-list').click({ position: { x: 5, y: 5 } }); // the input loses the focus
     assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('editor') ?? false), false);
 
     // the toolbar's bottom padding, below the text area
@@ -563,7 +566,7 @@ describe('dropping folders on the folders chip', () => {
   const cls = (selector) => page.locator(selector).getAttribute('class');
 
   test('a drop on the chip goes to folders.drop, not to the attachments', async () => {
-    await setState({ folders: state() });
+    await setPanel({ folders: state() });
     const over = await dragOn('.folders-btn', 'dragover');
     assert.equal(over.prevented, true);
     await dragOn('.folders-btn', 'drop', ['docs', 'libs']);
@@ -572,7 +575,7 @@ describe('dropping folders on the folders chip', () => {
   });
 
   test('the chip is highlighted instead of the box while dragging over it', async () => {
-    await setState({ folders: state() });
+    await setPanel({ folders: state() });
     await dragOn('.folders-btn', 'dragenter');
     assert.match(await cls('.folders-btn'), /drop-target/);
     assert.doesNotMatch(await cls('.composer-box'), /drop-target/);
@@ -586,14 +589,14 @@ describe('dropping folders on the folders chip', () => {
   });
 
   test('the open popover takes drops too', async () => {
-    await setState({ folders: state() });
+    await setPanel({ folders: state() });
     await page.locator('.folders-btn').click();
     await dragOn('.folders-pop', 'drop');
     assert.equal(await countOf('folders.drop'), 1);
   });
 
   test('a read-only chip takes nothing', async () => {
-    await setState({ folders: state({ canEdit: false }) });
+    await setPanel({ folders: state({ canEdit: false }) });
     await dragOn('.folders-btn', 'dragenter');
     assert.doesNotMatch(await cls('.folders-btn'), /drop-target/);
     assert.doesNotMatch(await cls('.composer-box'), /drop-target/);
@@ -604,7 +607,7 @@ describe('dropping folders on the folders chip', () => {
   });
 
   test('a drag without paths (Solution Explorer) is still reported', async () => {
-    await setState({ folders: state() });
+    await setPanel({ folders: state() });
     await dragOn('.folders-btn', 'drop', []);
     const m = await lastOf('folders.drop');
     assert.ok(m, 'folders.drop should be posted');
@@ -612,7 +615,7 @@ describe('dropping folders on the folders chip', () => {
   });
 
   test('drops elsewhere still attach files', async () => {
-    await setState({ folders: state() });
+    await setPanel({ folders: state() });
     await dragOn('.composer-box', 'drop', ['a.cs']);
     assert.equal(await countOf('folders.drop'), 0);
     assert.deepEqual((await lastOf('composer.drop')).files, ['a.cs']);

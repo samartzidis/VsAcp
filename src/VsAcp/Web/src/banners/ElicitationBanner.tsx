@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { post } from '../bridge/host';
 import type { Banner, ElicitationField } from '../bridge/protocol';
-import { resolveBanner } from './resolve';
+import { useChat } from '../chat';
+import { useResolveBanner } from './resolve';
 import { fieldLabel, groupSteps, initialState, readField, type FieldValue, type FormState } from './elicitation';
 import { BannerCard, BannerFooter, HelpIcon, OptionList, letterIndex, type Choice } from './card';
 
@@ -13,6 +13,8 @@ type ElicitationBanner = Extract<Banner, { kind: 'elicitation' }>;
  * shows the link with Open in browser / Done / Cancel.
  */
 export function ElicitationBanner({ banner }: { banner: ElicitationBanner }) {
+  const chat = useChat();
+  const resolveBanner = useResolveBanner();
   const [state, setState] = useState<FormState>(() => initialState(banner.fields));
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +84,7 @@ export function ElicitationBanner({ banner }: { banner: ElicitationBanner }) {
           <BannerFooter
             secondary={{ label: 'Cancel', hint: 'Esc', onClick: decline }}
             extra={
-              <button type="button" class="banner-btn ghost" onClick={() => post({ type: 'banner.openUrl', id: banner.id })}>
+              <button type="button" class="banner-btn ghost" onClick={() => chat.post({ type: 'banner.openUrl', id: banner.id })}>
                 Open in browser
               </button>
             }

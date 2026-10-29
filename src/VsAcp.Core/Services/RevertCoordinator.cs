@@ -48,6 +48,12 @@ public sealed class RevertCoordinator
     }
 
     /// <summary>
+    /// The files the last <see cref="RevertAsync"/> could not restore (workspace-relative; still as they were). The
+    /// rest of the revert was done, so the caller should tell the user.
+    /// </summary>
+    public IReadOnlyList<string> FailedFiles { get; private set; } = [];
+
+    /// <summary>
     /// The files the agent reported changing in the turns a revert to <paramref name="checkpointId"/> discards
     /// (the target message's own turn and everything after it). Null when that is unknown: the target is not in
     /// <paramref name="messages"/>, or one of the discarded user messages was saved before tool steps recorded
@@ -103,7 +109,10 @@ public sealed class RevertCoordinator
         Serilog.Log.Information("[Revert] Restoring {Scope}", onlyPaths is null
             ? (includeOther ? "every file (the user asked)" : "every file (the agent's files are unknown)")
             : $"the agent's {onlyPaths.Count} file(s)");
-        await _checkpointService.RestoreAsync(checkpointId, onlyPaths);
+        var restored = await _checkpointService.RestoreAsync(checkpointId, onlyPaths);
+        FailedFiles = restored.Failed;
+        if (restored.Failed.Count > 0)
+            Serilog.Log.Warning("[Revert] {Count} file(s) could not be restored: {Files}", restored.Failed.Count, string.Join(", ", restored.Failed));
 
         // 2. Find the ordinal of the user message that owns this checkpoint, and the messages to keep.
         int keepUpToOrdinal = -1;

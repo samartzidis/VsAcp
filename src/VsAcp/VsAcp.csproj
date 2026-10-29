@@ -58,7 +58,7 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3240.44" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.5" />
     <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
-    <PackageReference Include="System.Text.Json" Version="10.0.3" />
+    <PackageReference Include="System.Text.Json" Version="10.0.5" />
   </ItemGroup>
 
   <ItemGroup>
@@ -79,6 +79,7 @@
       <VSIXSubPath>UnifiedSettings</VSIXSubPath>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!-- The pkgdef's SettingsManifests CacheTag comes from the compiled assembly: without this a JSON-only edit leaves the tag, so VS keeps its cached settings page. --><CustomAdditionalCompileInputs Include="UnifiedSettings\registration.json" />
     <!-- Referenced by source.extension.vsixmanifest's <Icon> element. -->
     <Content Include="Resources\Icon.png">
       <IncludeInVSIX>true</IncludeInVSIX>
@@ -90,9 +91,11 @@
     Include all output DLLs in the VSIX except the BCL / Microsoft.Extensions assemblies that VS 18.10+
     ships and redirects itself (devenv.exe.config redirects them to its own 10.0.0.x copies, so ours would
     never load). Everything else is shipped because VSSDK's deny-list would otherwise drop it.
+    Microsoft.Extensions.AI.Abstractions is VS 18's too (PrivateAssemblies, redirected up to 10.4.0.0, which is what
+    ModelContextProtocol.Core 1.2.0 needs): an SDK needing a newer one would fail to load, not fall back to a copy of ours.
   -->
   <ItemGroup>
-    <VsProvidedAssembly Include="Microsoft.Bcl.AsyncInterfaces;System.Text.Json;System.Text.Encodings.Web;System.Diagnostics.DiagnosticSource;System.IO.Pipelines;System.Threading.Channels;Microsoft.Extensions.DependencyInjection.Abstractions;Microsoft.Extensions.DependencyInjection;Microsoft.Extensions.Options;Microsoft.Extensions.Logging.Abstractions;Microsoft.Extensions.Logging;Microsoft.Extensions.Primitives" />
+    <VsProvidedAssembly Include="Microsoft.Bcl.AsyncInterfaces;System.Text.Json;System.Text.Encodings.Web;System.Diagnostics.DiagnosticSource;System.IO.Pipelines;System.Threading.Channels;Microsoft.Extensions.DependencyInjection.Abstractions;Microsoft.Extensions.DependencyInjection;Microsoft.Extensions.Options;Microsoft.Extensions.Logging.Abstractions;Microsoft.Extensions.Logging;Microsoft.Extensions.Primitives;Microsoft.Extensions.AI.Abstractions" />
     <!-- Also drop them from the normal copy-local path (VSSDK's own deny-list only covers some). -->
     <SuppressFromVsix Include="@(VsProvidedAssembly->'%(Identity).dll')" />
   </ItemGroup>

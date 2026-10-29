@@ -2,6 +2,7 @@ using VsAcp.Core.Abstractions;
 using VsAcp.Core.Acp;
 using VsAcp.Core.Acp.Handlers;
 using VsAcp.Core.Configuration;
+using VsAcp.Core.IdeTools;
 using VsAcp.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -49,7 +50,8 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<AcpClientHandler>(),
                 sp.GetRequiredService<SessionUpdateAdapter>(),
                 sp.GetRequiredService<IOptions<VsAcpOptions>>(),
-                sp.GetRequiredService<ILogger<AcpSessionService>>()));
+                sp.GetRequiredService<ILogger<AcpSessionService>>(),
+                sp.GetService<IIdeToolsEndpoint>()));
 
         return services;
     }

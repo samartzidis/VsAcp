@@ -25,6 +25,18 @@ public sealed class RestorePreview
     public RestorePreview? Excluded { get; init; }
 }
 
+/// <summary>What <see cref="ICheckpointService.RestoreAsync"/> could not do. The rest of the restore was still done.</summary>
+public sealed class RestoreResult
+{
+    public static readonly RestoreResult Complete = new() { Failed = [] };
+
+    /// <summary>
+    /// Files the restore could not write or delete (another process kept them open or locked, or they are read-only),
+    /// relative to the workspace root, using backslashes. They are left as they were.
+    /// </summary>
+    public required IReadOnlyList<string> Failed { get; init; }
+}
+
 public interface ICheckpointService
 {
     /// <summary>
@@ -39,8 +51,10 @@ public interface ICheckpointService
     /// Writes all tracked files back to disk and deletes files not present in the snapshot.
     /// With <paramref name="onlyPaths"/> (absolute paths), only those files are written, recreated or deleted;
     /// every other file is left as it is.
+    /// A file another process holds open is retried briefly; one that still cannot be written or deleted does not stop
+    /// the restore, it is listed in <see cref="RestoreResult.Failed"/>.
     /// </summary>
-    Task RestoreAsync(string checkpointId, IReadOnlyCollection<string>? onlyPaths = null, CancellationToken ct = default);
+    Task<RestoreResult> RestoreAsync(string checkpointId, IReadOnlyCollection<string>? onlyPaths = null, CancellationToken ct = default);
 
     /// <summary>
     /// Computes which files <see cref="RestoreAsync"/> would overwrite, recreate or delete, without

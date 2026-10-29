@@ -1,10 +1,10 @@
 import type { ComponentChildren } from 'preact';
-import { post } from '../bridge/host';
 import type { AttachmentKind } from '../bridge/protocol';
-import { composer } from '../state';
+import { useChat } from '../chat';
 import { FileGlyph, FolderGlyph, ImageGlyph } from './icons';
 
 function Chip(props: { kind: AttachmentKind; id: string; icon: ComponentChildren; label: string; title?: string }) {
+  const chat = useChat();
   return (
     <span class="attach-chip" title={props.title}>
       {props.icon}
@@ -13,7 +13,7 @@ function Chip(props: { kind: AttachmentKind; id: string; icon: ComponentChildren
         type="button"
         class="attach-remove"
         aria-label={`Remove ${props.label}`}
-        onClick={() => post({ type: 'composer.remove', kind: props.kind, id: props.id })}
+        onClick={() => chat.post({ type: 'composer.remove', kind: props.kind, id: props.id })}
       >
         {'✕'}
       </button>
@@ -23,7 +23,7 @@ function Chip(props: { kind: AttachmentKind; id: string; icon: ComponentChildren
 
 /** Images, dropped files/folders and pasted code references waiting to be sent with the next message. */
 export function Attachments() {
-  const { images, files, attachedFolders, selections } = composer.value;
+  const { images, files, attachedFolders, selections } = useChat().composer.value;
   if (images.length + files.length + attachedFolders.length + selections.length === 0) return null;
   return (
     <div class="attachments">

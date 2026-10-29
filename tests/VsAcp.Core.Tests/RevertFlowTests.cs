@@ -244,6 +244,43 @@ public class RevertFlowTests
     }
 
     [Fact]
+    public async Task A_revert_retries_a_file_another_program_holds_for_a_moment()
+    {
+        // 2026-10-28: the workspace scan after a turn (and in VS an indexer or virus scanner) has a file open for
+        // reading for a few milliseconds, and the restore's exclusive write threw "a.txt in use", stopping half-way.
+        using var h = await ChatHarness.CreateAsync(Scenario());
+        await h.SendAsync("one");
+        await h.SendAsync("two");
+
+        var held = new FileStream(h.PathOf("a.txt"), FileMode.Open, FileAccess.Read, FileShare.Read);
+        // A dedicated thread, not Task.Run/Task.Delay: on a starved pool the release would come after the retries gave up.
+        new Thread(() => { Thread.Sleep(300); held.Dispose(); }) { IsBackground = true }.Start();
+        await h.RevertToUserMessageAsync(1);
+
+        Assert.Equal("one", h.ReadFile("a.txt"));
+        Assert.False(h.FileExists("new.txt"));
+        Assert.DoesNotContain(h.Messages, m => m.Content.Contains("Not restored"));
+        Assert.Equal(new[] { "one", "wrote one" }, h.Messages.Select(m => m.Content).ToArray());
+    }
+
+    [Fact]
+    public async Task A_file_that_stays_locked_does_not_stop_the_revert_and_is_named_in_a_notice()
+    {
+        using var h = await ChatHarness.CreateAsync(Scenario());
+        await h.SendAsync("one");
+        await h.SendAsync("two");
+
+        using (new FileStream(h.PathOf("a.txt"), FileMode.Open, FileAccess.Read, FileShare.Read))
+            await h.RevertToUserMessageAsync(1);
+
+        Assert.Equal("two", h.ReadFile("a.txt")); // left as it was
+        Assert.False(h.FileExists("new.txt"));    // the rest of the restore was done
+        var persisted = await h.PersistedAsync();
+        Assert.Equal(new[] { "one", "wrote one" }, persisted.Select(p => p.Content).ToArray()); // and the history cut
+        Assert.Contains(h.Messages, m => m.Content.Contains("Not restored") && m.Content.Contains("a.txt"));
+    }
+
+    [Fact]
     public async Task A_revert_to_a_checkpoint_this_chat_does_not_own_changes_nothing()
     {
         // 2026-10-25 in VS: a Revert click in one tab also ran in every other open tab. There the checkpoint was

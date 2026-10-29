@@ -9,6 +9,7 @@ using VsAcp.Core.Acp.Handlers;
 using VsAcp.Core.Models;
 using AcpProtocol;
 using VsAcp.Core.Configuration;
+using VsAcp.Core.IdeTools;
 
 namespace VsAcp.Core.Acp;
 
@@ -19,6 +20,7 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
     readonly SessionUpdateAdapter _sessionUpdateAdapter;
     readonly IOptions<VsAcpOptions> _options;
     readonly ILogger<AcpSessionService> _logger;
+    readonly IIdeToolsEndpoint? _ideTools;
 
     ClientSideConnection? _connection;
     // _connection finished its initialize handshake, so a new session can be opened on it without a restart.
@@ -32,6 +34,8 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
     UsageUpdate? _usage;
     AgentCapabilities? _agentCapabilities;
     string[]? _activeAdditionalDirectories;
+    // The IDE tools were withheld from this agent process because it takes no HTTP MCP servers (logged once).
+    bool _ideToolsWithheldLogged;
 
     // Context block injected into the next user prompt after a revert. We can't
     // inject it as a separate silent turn because Cursor's agent filters out
@@ -50,12 +54,14 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
         AcpClientHandler clientHandler,
         SessionUpdateAdapter sessionUpdateAdapter,
         IOptions<VsAcpOptions> options,
-        ILogger<AcpSessionService> logger)
+        ILogger<AcpSessionService> logger,
+        IIdeToolsEndpoint? ideTools = null)
     {
         _processHost = processHost;
         _clientHandler = clientHandler;
         _sessionUpdateAdapter = sessionUpdateAdapter;
         _options = options;
+        _ideTools = ideTools;
 
         _sessionUpdateAdapter.ModeUpdated += newModeId =>
         {
@@ -346,7 +352,7 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
         {
             SessionId = sourceId,
             Cwd = _options.Value.WorkingDirectory,
-            McpServers = [],
+            McpServers = McpServersFor(_agentCapabilities!),
             AdditionalDirectories = additionalDirectories,
             // The fork point: claude-agent-acp reads it from JetBrains AIR's extension, as an agent_message_chunk
             // messageId, and copies the session up to and including that message. Without it, the whole session.
@@ -665,6 +671,7 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
             }, cancellationToken);
 
             _agentCapabilities = initResponse.AgentCapabilities;
+            _ideToolsWithheldLogged = false;
             _connectionReady = true;
             _logger.LogInformation("Agent initialized: {Name} v{Version}",
                 initResponse.AgentInfo?.Name, initResponse.AgentInfo?.Version);
@@ -698,7 +705,7 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
                     {
                         SessionId = restoredSessionId,
                         Cwd = _options.Value.WorkingDirectory,
-                        McpServers = []
+                        McpServers = McpServersFor(initResponse.AgentCapabilities)
                     };
                     if (additionalDirectories is not null)
                         loadRequest = loadRequest with { AdditionalDirectories = additionalDirectories };
@@ -767,7 +774,7 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
         var newRequest = new NewSessionRequest
         {
             Cwd = _options.Value.WorkingDirectory,
-            McpServers = []
+            McpServers = McpServersFor(_agentCapabilities!)
         };
         if (additionalDirectories is not null)
             newRequest = newRequest with { AdditionalDirectories = additionalDirectories };
@@ -780,6 +787,26 @@ public sealed class AcpSessionService : IChatService, IAcpSessionLifecycle, IDis
         ApplyConfigOptions(sessionResponse.ConfigOptions);
         ApplyModeState(sessionResponse.Modes);
         _logger.LogInformation("ACP session created: {SessionId}", _sessionId);
+    }
+
+    /// <summary>
+    /// The MCP servers to offer at session setup: the IDE tools server (ADR-061) when the user turned it on and the
+    /// agent advertises <c>mcpCapabilities.http</c>; otherwise none.
+    /// </summary>
+    McpServer[] McpServersFor(AgentCapabilities capabilities)
+    {
+        if (_ideTools?.Describe() is not { } server)
+            return [];
+
+        if (!capabilities.McpCapabilities.Http)
+        {
+            if (!_ideToolsWithheldLogged)
+                _logger.LogInformation("[IdeTools] The agent takes no HTTP MCP servers; IDE tools not offered");
+            _ideToolsWithheldLogged = true;
+            return [];
+        }
+
+        return [server];
     }
 
     /// <summary>

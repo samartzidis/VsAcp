@@ -8,7 +8,9 @@ export function Svg({ d, size = 14, viewBox = '0 0 24 24', stroke }: { d: string
   );
 }
 
-export const ChevronIcon = () => <Svg d="M0,0 L4,4 L8,0" size={8} viewBox="0 0 8 4" stroke />;
+/** A bulleted list (Material "format_list_bulleted"): the log lines. */
+export const LogIcon = () => <Svg d="M3,13H5V11H3V13M3,17H5V15H3V17M3,9H5V7H3V9M7,13H21V11H7V13M7,17H21V15H7V17M7,7V9H21V7H7Z" />;
+export const ChevronIcon =() => <Svg d="M0,0 L4,4 L8,0" size={8} viewBox="0 0 8 4" stroke />;
 export const AttachIcon = () => <Svg d="M16.5,6V17.5A4,4 0 0,1 12.5,21.5A4,4 0 0,1 8.5,17.5V5A2.5,2.5 0 0,1 11,2.5A2.5,2.5 0 0,1 13.5,5V15.5A1,1 0 0,1 12.5,16.5A1,1 0 0,1 11.5,15.5V6H10V15.5A2.5,2.5 0 0,0 12.5,18A2.5,2.5 0 0,0 15,15.5V5A4,4 0 0,0 11,1A4,4 0 0,0 7,5V17.5A5.5,5.5 0 0,0 12.5,23A5.5,5.5 0 0,0 18,17.5V6H16.5Z" />;
 export const ShieldIcon = () => <Svg d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M10,17L6,13L7.41,11.59L10,14.17L16.59,7.58L18,9L10,17Z" size={13} />;
 export const CloseIcon = () => <Svg d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" size={13} />;

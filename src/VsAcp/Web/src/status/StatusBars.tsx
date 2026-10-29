@@ -1,13 +1,12 @@
 import { useState } from 'preact/hooks';
-import { post } from '../bridge/host';
 import type { PendingFile, PendingSource } from '../bridge/protocol';
 import { ChevronIcon, CloseIcon, KeepIcon } from '../composer/icons';
-import { composer } from '../state';
+import { useChat } from '../chat';
 import { FileBadge } from './FileBadge';
 
 /** "Thinking..." line shown while a turn is running. */
 export function BusyBar() {
-  if (!composer.value.busy) return null;
+  if (!useChat().composer.value.busy) return null;
   return (
     <div class="busy-bar">
       <span class="busy-spinner" aria-hidden="true" />
@@ -27,7 +26,7 @@ const KIND_LABEL = { added: 'new', deleted: 'deleted' } as const;
  * own Undo All / Keep All, so build output never crowds out the agent's edits.
  */
 export function PendingChangesBar() {
-  const files = composer.value.pendingFiles;
+  const files = useChat().composer.value.pendingFiles;
   if (files.length === 0) return null;
   const agent = files.filter((f) => f.source !== 'scan');
   const other = files.filter((f) => f.source === 'scan');
@@ -41,6 +40,7 @@ export function PendingChangesBar() {
 }
 
 function PendingGroup({ source, files }: { source: PendingSource; files: PendingFile[] }) {
+  const chat = useChat();
   const isOther = source === 'scan';
   const [expanded, setExpanded] = useState(!isOther);
   const deleted = isOther ? files.filter((f) => f.kind === 'deleted').length : 0;
@@ -72,7 +72,7 @@ function PendingGroup({ source, files }: { source: PendingSource; files: Pending
             type="button"
             class="pending-link"
             aria-label={`Undo All${scope}`}
-            onClick={() => post({ type: 'changes.rejectAll', source })}
+            onClick={() => chat.post({ type: 'changes.rejectAll', source })}
           >
             Undo All
           </button>
@@ -80,7 +80,7 @@ function PendingGroup({ source, files }: { source: PendingSource; files: Pending
             type="button"
             class="pending-link"
             aria-label={`Keep All${scope}`}
-            onClick={() => post({ type: 'changes.acceptAll', source })}
+            onClick={() => chat.post({ type: 'changes.acceptAll', source })}
           >
             Keep All
           </button>
@@ -98,6 +98,7 @@ function PendingGroup({ source, files }: { source: PendingSource; files: Pending
 }
 
 function PendingRow({ file: f }: { file: PendingFile }) {
+  const chat = useChat();
   const label = f.kind === 'modified' ? null : KIND_LABEL[f.kind];
   return (
     <li class={`pending-row ${f.kind}`}>
@@ -106,7 +107,7 @@ function PendingRow({ file: f }: { file: PendingFile }) {
         class="pending-open"
         title={label ? `${f.displayPath} (${label})` : f.displayPath}
         onClick={() => {
-          if (f.kind !== 'deleted') post({ type: 'changes.open', path: f.filePath });
+          if (f.kind !== 'deleted') chat.post({ type: 'changes.open', path: f.filePath });
         }}
       >
         <FileBadge fileName={f.fileName} />
@@ -121,7 +122,7 @@ function PendingRow({ file: f }: { file: PendingFile }) {
           class="pending-icon-btn"
           title={f.kind === 'added' ? `Undo: delete ${f.fileName}` : f.kind === 'deleted' ? `Undo: restore ${f.fileName}` : `Undo changes to ${f.fileName}`}
           aria-label={`Undo ${f.fileName}`}
-          onClick={() => post({ type: 'changes.undo', path: f.filePath })}
+          onClick={() => chat.post({ type: 'changes.undo', path: f.filePath })}
         >
           <CloseIcon />
         </button>
@@ -130,7 +131,7 @@ function PendingRow({ file: f }: { file: PendingFile }) {
           class="pending-icon-btn"
           title={`Keep changes to ${f.fileName}`}
           aria-label={`Keep ${f.fileName}`}
-          onClick={() => post({ type: 'changes.keep', path: f.filePath })}
+          onClick={() => chat.post({ type: 'changes.keep', path: f.filePath })}
         >
           <KeepIcon />
         </button>

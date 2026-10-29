@@ -182,6 +182,14 @@ public sealed class ElicitationHandler
                     case "array":
                     {
                         var m = el.Deserialize<MultiSelectPropertySchema>(options)!;
+                        if (m.Items is MultiSelectItemsUnknown unknownItems)
+                        {
+                            // A newer protocol's item type: no options we could offer, so fall back like an unsupported field.
+                            _logger.LogWarning("Elicitation field '{Name}' has unsupported item type '{Type}'; rendering as text", prop.Name, unknownItems.RawType);
+                            fields.Add(new AcpElicitationField { Name = prop.Name, Kind = AcpElicitationFieldKind.Text, Title = prop.Name, Required = isRequired });
+                            break;
+                        }
+
                         var choices = m.Items switch
                         {
                             TitledMultiSelectItems titled => titled.AnyOf.Select(o => new AcpElicitationOption { Value = o.Const, Title = o.Title, Description = o.Description }).ToList(),

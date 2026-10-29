@@ -31,6 +31,13 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- Caps how many test classes run at once. Every live fake agent keeps two thread-pool threads busy on
+       blocking pipe reads; with the default (one class per processor) the agents outnumber the pool's
+       minimum threads and the pool adds only about one thread per 500 ms, so agent startup stalls. -->
+  <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\VsAcp.Core\VsAcp.Core.csproj" />
     <ProjectReference Include="..\..\src\AcpProtocol\AcpProtocol.csproj" />

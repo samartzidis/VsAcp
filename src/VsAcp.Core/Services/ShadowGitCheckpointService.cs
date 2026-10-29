@@ -50,7 +50,7 @@ public sealed class ShadowGitCheckpointService : ICheckpointService
     public Task<string?> CreateCheckpointAsync(CancellationToken ct = default)
         => Task.Run(() => CreateCheckpointCore(ct), ct);
 
-    public Task RestoreAsync(string checkpointId, IReadOnlyCollection<string>? onlyPaths = null, CancellationToken ct = default)
+    public Task<RestoreResult> RestoreAsync(string checkpointId, IReadOnlyCollection<string>? onlyPaths = null, CancellationToken ct = default)
         => Task.Run(() => RestoreCore(checkpointId, ToFilter(onlyPaths), ct), ct);
 
     public Task<RestorePreview> PreviewRestoreAsync(string checkpointId, IReadOnlyCollection<string>? onlyPaths = null, CancellationToken ct = default)
@@ -402,9 +402,9 @@ public sealed class ShadowGitCheckpointService : ICheckpointService
     private string ToDisplayPath(string absPath)
         => absPath.Substring(_workspaceFolder.Length).TrimStart('\\', '/').Replace('/', '\\');
 
-    private void RestoreCore(string checkpointId, HashSet<string>? filter, CancellationToken ct)
+    private RestoreResult RestoreCore(string checkpointId, HashSet<string>? filter, CancellationToken ct)
     {
-        if (_shadowRepoPath is null) return;
+        if (_shadowRepoPath is null) return RestoreResult.Complete;
 
         EnsureShadowRepo();
 
@@ -417,6 +417,7 @@ public sealed class ShadowGitCheckpointService : ICheckpointService
         // Seeded with files that existed but were not captured, so they survive the delete pass.
         var snapshotPaths = ReadUnsnapshottedPaths(commit);
         int written = 0, skipped = 0, leftAlone = 0;
+        var failed = new List<string>();
 
         foreach (var entry in WalkTreeBlobs(commit.Tree))
         {
@@ -449,10 +450,13 @@ public sealed class ShadowGitCheckpointService : ICheckpointService
             if (dir is not null && !Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
 
-            using var stream = entry.Blob.GetContentStream();
-            using var fs = new FileStream(absPath, FileMode.Create, FileAccess.Write, FileShare.None);
-            stream.CopyTo(fs);
-            written++;
+            // One file another process will not let go of must not leave the rest of the workspace half-restored.
+            if (TryWriteBlob(absPath, entry.Blob, ct, out var error)) written++;
+            else
+            {
+                failed.Add(ToDisplayPath(absPath));
+                _logger.LogWarning("[Checkpoint] Could not restore {Path}: {Msg}", absPath, error);
+            }
         }
 
         // Delete files that didn't exist at snapshot time (agent-created files)
@@ -476,15 +480,54 @@ public sealed class ShadowGitCheckpointService : ICheckpointService
                 }
                 catch (Exception ex)
                 {
+                    failed.Add(ToDisplayPath(absPath));
                     _logger.LogWarning("[Checkpoint] Could not delete {Path}: {Msg}", absPath, ex.Message);
                 }
             }
         }
 
-        _logger.LogInformation("[Checkpoint] Restored {Id} ({Written} written, {Skipped} unchanged, {Deleted} deleted, {Kept} oversize kept{Filtered})",
-            checkpointId, written, skipped, deleted, keptOversize,
+        _logger.LogInformation("[Checkpoint] Restored {Id} ({Written} written, {Skipped} unchanged, {Deleted} deleted, {Kept} oversize kept, {Failed} failed{Filtered})",
+            checkpointId, written, skipped, deleted, keptOversize, failed.Count,
             filter is null ? "" : $", filtered to {filter.Count} file(s), {leftAlone} snapshot file(s) outside it");
+        return new RestoreResult { Failed = failed };
     }
+
+    // Waits before each retry of a write another process blocks (about 1.2 s in all): a scan, an indexer or a
+    // virus scanner usually lets go of a file within milliseconds.
+    private static readonly int[] SharingRetryDelaysMs = [20, 40, 80, 160, 320, 640];
+
+    /// <summary>
+    /// Writes the blob over the file. A sharing violation (another process has the file open) is retried; any other
+    /// failure, and a violation that outlasts the retries, returns false with the reason and leaves the file as it was
+    /// (the file is truncated only once it is open).
+    /// </summary>
+    private static bool TryWriteBlob(string absPath, Blob blob, CancellationToken ct, out string? error)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                using var stream = blob.GetContentStream();
+                using var fs = new FileStream(absPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                stream.CopyTo(fs);
+                error = null;
+                return true;
+            }
+            catch (IOException ex) when (IsSharingViolation(ex) && attempt < SharingRetryDelaysMs.Length)
+            {
+                ct.ThrowIfCancellationRequested();
+                Thread.Sleep(SharingRetryDelaysMs[attempt]);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+    }
+
+    // ERROR_SHARING_VIOLATION (32) and ERROR_LOCK_VIOLATION (33): the low 16 bits of the HRESULT are the Win32 code.
+    private static bool IsSharingViolation(IOException ex) => (ex.HResult & 0xFFFF) is 32 or 33;
 
     /// <summary>
     /// A file missing from the snapshot may only be deleted if the snapshot could have contained it.

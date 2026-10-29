@@ -15,8 +15,11 @@ using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Utilities.UnifiedSettings;
 using Serilog;
+using Serilog.Extensions.Logging;
 using Serilog.Formatting.Display;
 using VsAcp.Core.Configuration;
+using VsAcp.Core.IdeTools;
+using VsAcp.IdeTools;
 using VsAcp.InlineDiff;
 using VsAcp.Options;
 using VsAcp.ToolWindows;
@@ -61,6 +64,10 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
     // Read by the log pipeline on any thread, written on the UI thread by ApplySettings.
     // Starts on, like the setting's default, so startup lines before the first settings read are kept.
     private static volatile bool _fileLoggingEnabled = true;
+    // The IDE tools MCP server every chat tab offers its agent while the setting is on (ADR-061); the setting is read
+    // at each session setup and each request, from any thread.
+    private IdeToolsServer? _ideTools;
+    private volatile bool _ideToolsEnabled;
 
     public static bool IsLoaded => _instance is not null;
 
@@ -84,6 +91,14 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         }
 
         await LoadSettingsAsync(cancellationToken);
+
+        // Starts listening only when a chat first offers it to an agent with the setting on.
+        _ideTools = new IdeToolsServer(
+            new DteOutputPaneReader(JoinableTaskFactory),
+            new DteIdeStateReader(JoinableTaskFactory, this),
+            hiddenPaneIds: [OutputPaneGuid.ToString()],
+            isEnabled: () => _ideToolsEnabled,
+            new SerilogLoggerFactory(dispose: false));
 
         _sessionListViewModel = new SessionListViewModel();
 
@@ -166,9 +181,16 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         _agentSettings = resolved;
         Controls.ChatWebView.DevToolsEnabled = resolved.EnableChatDevTools;
         _fileLoggingEnabled = resolved.EnableFileLogging;
-        Log.Information("[Settings] Preset='{Preset}', AgentCommand='{Cmd}', AgentArguments='{Args}', DevTools={DevTools}, FileLogging={FileLogging}",
-            resolved.Preset, resolved.AgentCommand, resolved.AgentArguments, resolved.EnableChatDevTools, resolved.EnableFileLogging);
+        _ideToolsEnabled = resolved.EnableIdeTools;
+        Log.Information("[Settings] Preset='{Preset}', AgentCommand='{Cmd}', AgentArguments='{Args}', DevTools={DevTools}, FileLogging={FileLogging}, IdeTools={IdeTools}, Environment={Environment}",
+            resolved.Preset, resolved.AgentCommand, resolved.AgentArguments, resolved.EnableChatDevTools, resolved.EnableFileLogging,
+            resolved.EnableIdeTools, DescribeEnvironment(resolved));
     }
+
+    /// <summary>The variable names of each preset, for the log. Never the values: they may be secrets.</summary>
+    private static string DescribeEnvironment(AgentSettings settings) =>
+        string.Join("; ", new[] { AgentPresets.Cursor, AgentPresets.ClaudeCode, AgentPresets.Custom }
+            .Select(preset => $"{preset}=[{string.Join(", ", settings.EnvironmentOf(preset).Keys)}]"));
 
     /// <summary>
     /// Opens Tools &gt; Options on the ACP Agent page: the Unified Settings UI takes the category moniker
@@ -187,6 +209,40 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         object arg = "acpAgent";
         var hr = shell.PostExecCommand(ref group, (uint)Microsoft.VisualStudio.VSConstants.VSStd97CmdID.ToolsOptions, 0, ref arg);
         Log.Information("[Settings] Open: PostExecCommand(ToolsOptions, '{Arg}') hr=0x{Hr:X8}", arg, hr);
+    }
+
+    /// <summary>
+    /// The shared folders of the open solution, for the panel's folders chip (which is there with or without a chat
+    /// open); null when no solution is open or it has no local folder to save the choices in.
+    /// </summary>
+    internal static ExtraFoldersController? CurrentExtraFolders()
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        if (_instance?.GetSolutionDirectory() is not { } dir || VsAcpPaths.IsNetworkPath(dir)) return null;
+        var key = ProjectFolders.Normalize(dir) ?? dir;
+        return _instance._extraFolders.TryGetValue(key, out var existing)
+            ? existing
+            : _instance.ExtraFoldersOf(dir, _instance.GetProjectDirectoriesOutside(dir));
+    }
+
+    /// <summary>
+    /// The solution's shared folders (one list per solution folder, created on first use), with its auto-detected
+    /// project folders brought up to date. Only for a local project folder: that is where the choices are saved.
+    /// </summary>
+    private ExtraFoldersController? ExtraFoldersOf(string? solutionDir, string[] autoDirectories)
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        if (solutionDir is null || VsAcpPaths.IsNetworkPath(solutionDir)) return null;
+
+        var key = ProjectFolders.Normalize(solutionDir) ?? solutionDir;
+        if (_extraFolders.TryGetValue(key, out var extraFolders))
+            extraFolders.SetAutoDirectories(autoDirectories); // the solution's projects may have changed since
+        else
+            _extraFolders[key] = extraFolders = new ExtraFoldersController(
+                solutionDir,
+                autoDirectories,
+                new ExtraFoldersStore(VsAcpPaths.ExtraFoldersPath(solutionDir)));
+        return extraFolders;
     }
 
     private ChatSessionViewModel CreateChatViewModel(
@@ -224,8 +280,8 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         // The preset goes with the command: a saved chat keeps its own (none for chats saved before it was recorded).
         var effectivePreset = savedAgentCommand is null ? options.Preset : savedAgentPreset;
 
-        Log.Information("[Settings] Building tab DI container: AgentCommand='{Cmd}', AgentArguments='{Args}'{Override}",
-            effectiveCommand, effectiveArgs,
+        Log.Information("[Settings] Building tab DI container: AgentCommand='{Cmd}', AgentArguments='{Args}', Environment=[{Names}]{Override}",
+            effectiveCommand, effectiveArgs, string.Join(", ", options.EnvironmentOf(effectivePreset).Keys),
             savedAgentCommand is not null ? " [session-saved]" : "");
 
         services.AddVsAcpServices(o =>
@@ -237,7 +293,13 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
             o.AgentPreset = effectivePreset;
             o.AgentArgs = effectiveArgs
                 .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            // Not saved with the chat (it may hold secrets): a reopened chat gets its own preset's current list.
+            o.AgentEnv = options.EnvironmentOf(effectivePreset).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
         });
+
+        // This tab's token for the IDE tools; the container disposes the endpoint with the tab, which revokes it.
+        if (_ideTools is { } ideTools)
+            services.AddSingleton<IIdeToolsEndpoint>(_ => ideTools.CreateEndpoint(sessionId));
 
         var provider = services.BuildServiceProvider();
         _sessionProviders[sessionId] = provider;
@@ -280,21 +342,10 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         var vm = new ChatSessionViewModel(chatService, acpSessionLifecycle, outputListener, optionsAccessor, permissionBroker, checkpointService, elicitationBroker);
 
         // Folders beyond the solution folder: the auto-detected project folders plus the user's choices for this
-        // solution. Only with a local project folder (that is where the choices are saved). The list is shared by
-        // every tab of the solution; each tab puts the merged list into its own agent options, so it applies to
-        // every session that tab starts or loads.
-        if (currentSolutionDir is not null && !isNetworkPath)
-        {
-            var key = ProjectFolders.Normalize(currentSolutionDir) ?? currentSolutionDir;
-            if (_extraFolders.TryGetValue(key, out var extraFolders))
-                extraFolders.SetAutoDirectories(additionalDirs); // the solution's projects may have changed since
-            else
-                _extraFolders[key] = extraFolders = new ExtraFoldersController(
-                    currentSolutionDir,
-                    additionalDirs,
-                    new ExtraFoldersStore(VsAcpPaths.ExtraFoldersPath(currentSolutionDir)));
+        // solution. The list is shared by every tab of the solution; each tab puts the merged list into its own agent
+        // options, so it applies to every session that tab starts or loads.
+        if (ExtraFoldersOf(currentSolutionDir, additionalDirs) is { } extraFolders)
             vm.AttachExtraFolders(extraFolders, dirs => optionsAccessor.Value.AdditionalDirectories = dirs);
-        }
 
         vm.RevertCompleted += () => _ = JoinableTaskFactory.RunAsync(async () =>
         {
@@ -350,6 +401,25 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
     }
 
     private static readonly Guid OutputPaneGuid = new("7E2A4A6B-1F3C-4D8E-9B5C-2A1D3E4F6B7A");
+
+    /// <summary>Shows the Output window and selects the VsAcp pane in it.</summary>
+    internal static void ShowLogs()
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        if (_instance is not { } package)
+            return;
+
+        // The window first: activating a pane alone does not bring a hidden or collapsed Output window forward.
+        if (package.GetService(typeof(SVsUIShell)) is IVsUIShell shell)
+        {
+            var outputWindow = Microsoft.VisualStudio.VSConstants.StandardToolWindows.Output;
+            if (shell.FindToolWindow((uint)__VSFINDTOOLWIN.FTW_fForceCreate, ref outputWindow, out var frame) == Microsoft.VisualStudio.VSConstants.S_OK)
+                frame?.Show();
+        }
+
+        var hr = package.EnsureOutputPane()?.Activate();
+        Log.Information("[Logs] Open: Output window shown, VsAcp pane activate hr=0x{Hr:X8}", hr ?? -1);
+    }
 
     private IVsOutputWindowPane? EnsureOutputPane()
     {
@@ -471,6 +541,42 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         }
     }
 
+    /// <summary>
+    /// Makes the chat tool window VS's active window, unless it already is. A click into the page goes to Chromium's own
+    /// window, so VS never hears of it: it keeps another window (an editor, say) as the active one, and when the VS
+    /// window is activated (the click came from another app) it restores the focus there, out of the page (ADR-057).
+    /// Activating this window makes VS put the focus in it, and TabbedChatControl passes it on to the page.
+    /// </summary>
+    internal static void ActivateChatWindow()
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        if (ChatWindowFrame() is not { } frame || IsActiveFrame(frame)) return;
+
+        Log.Debug("[TabbedChat] [Focus] The page took the focus while another VS window was active; activating the chat window");
+        frame.Show();
+    }
+
+    /// <summary>Whether the chat tool window is VS's active window (the one VS gives the focus back to).</summary>
+    internal static bool IsChatWindowActive()
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        return ChatWindowFrame() is { } frame && IsActiveFrame(frame);
+    }
+
+    private static IVsWindowFrame? ChatWindowFrame()
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        return _instance?.FindToolWindow(typeof(VsAcpToolWindow), 0, false)?.Frame as IVsWindowFrame;
+    }
+
+    private static bool IsActiveFrame(IVsWindowFrame frame)
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        return _instance?.GetService(typeof(SVsShellMonitorSelection)) is IVsMonitorSelection selection
+            && selection.GetCurrentElementValue((uint)Microsoft.VisualStudio.VSConstants.VSSELELEMID.SEID_WindowFrame, out var active) == Microsoft.VisualStudio.VSConstants.S_OK
+            && ReferenceEquals(active, frame);
+    }
+
     private TabbedChatControl? GetTabbedChat()
     {
         ThreadHelper.ThrowIfNotOnUIThread();
@@ -547,7 +653,7 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         }
     }
 
-    internal static void InitializeChatControl(ChatSessionControl control, SessionInfo session)
+    internal static void InitializeChatControl(ChatTab control, SessionInfo session)
     {
         if (_instance is null) return;
 
@@ -837,6 +943,9 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
             foreach (var provider in _sessionProviders.Values)
                 provider.Dispose();
             _sessionProviders.Clear();
+
+            _ideTools?.Dispose();
+            _ideTools = null;
         }
         base.Dispose(disposing);
     }

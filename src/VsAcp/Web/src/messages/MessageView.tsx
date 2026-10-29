@@ -1,12 +1,11 @@
 import { signal } from '@preact/signals';
 import { useRef, useState } from 'preact/hooks';
-import { post } from '../bridge/host';
+import { useChat } from '../chat';
 import type { ChatMessage, MessageStatus } from '../bridge/protocol';
 import { copyToClipboard } from './clipboard';
 import { CheckIcon, CopyIcon, ForkIcon, RevertIcon, ToolIcon } from './icons';
 import { parseToolTitle, toolIconKind } from './render';
 import { RichContent } from './RichContent';
-import { messageSignal } from './store';
 
 /** Source of the image shown full-size over the list, or null. */
 export const lightboxSrc = signal<string | null>(null);
@@ -51,6 +50,7 @@ function CopyButton({ getText }: { getText: () => string }) {
 }
 
 function ForkButton({ messageId }: { messageId: string }) {
+  const { post } = useChat();
   return (
     <button
       type="button"
@@ -80,6 +80,7 @@ function Chips({ items, glyph = '📄 ' }: { items: { text: string; title?: stri
 }
 
 function UserMessage({ m }: { m: ChatMessage }) {
+  const { post } = useChat();
   const content = useRef<HTMLDivElement>(null);
   return (
     <div id={'msg-' + m.id} class="msg msg-user" data-type="User">
@@ -228,7 +229,7 @@ function ThinkingMessage({ m }: { m: ChatMessage }) {
 }
 
 export function MessageView({ id }: { id: string }) {
-  const m = messageSignal(id)?.value;
+  const m = useChat().messages.messageSignal(id)?.value;
   if (!m) return null;
   switch (m.type) {
     case 'User':
