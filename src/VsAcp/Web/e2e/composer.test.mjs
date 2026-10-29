@@ -306,13 +306,16 @@ describe('toolbar, attachments and status', () => {
     assert.match(await page.locator('.toolbar .ctx-btn').getAttribute('class'), /off/);
   });
 
-  test('settings cog sits first in the footer row, left of the folders chip, and asks the host to open the settings', async () => {
+  test('settings cog and log button sit first in the footer row, left of the folders chip, and ask the host to open them', async () => {
     await setPanel({ folders: { items: [], supported: true, canEdit: true } });
     const order = await page.locator('.panel-footer > *').evaluateAll((els) => els.map((e) => e.className));
     assert.match(order[0], /settings-btn/);
-    assert.match(order[1], /folders/);
+    assert.match(order[1], /logs-btn/);
+    assert.match(order[2], /folders/);
     await page.locator('.settings-btn').click();
     assert.equal(await countOf('settings.open'), 1);
+    await page.locator('.logs-btn').click();
+    assert.equal(await countOf('logs.open'), 1);
   });
 
   test('pending files list shows the files with their line counts and its actions', async () => {

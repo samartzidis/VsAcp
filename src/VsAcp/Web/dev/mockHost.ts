@@ -54,6 +54,7 @@ const panelTypes = new Set([
   'tabs.close',
   'tabs.rename',
   'settings.open',
+  'logs.open',
   'folders.add',
   'folders.remove',
   'folders.drop',

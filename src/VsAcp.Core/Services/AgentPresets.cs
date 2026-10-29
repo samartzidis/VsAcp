@@ -24,6 +24,21 @@ public static class AgentPresets
     };
 
     /// <summary>
+    /// The effective preset and command line from the saved preset and the optional command / arguments fields.
+    /// Each field is resolved on its own: blank (or whitespace) takes the preset's value, anything else replaces it.
+    /// <see cref="Custom"/> has no values of its own, so its blank fields take Cursor's. An unknown preset reads as Cursor.
+    /// </summary>
+    public static (string Preset, string Command, string Arguments) Resolve(string? preset, string? command, string? arguments)
+    {
+        if (preset != Custom && CommandLine(preset) is null)
+            preset = Cursor;
+        var (presetCommand, presetArguments) = CommandLine(preset) ?? (CursorCommand, CursorArguments);
+        return (preset!,
+            string.IsNullOrWhiteSpace(command) ? presetCommand : command!.Trim(),
+            string.IsNullOrWhiteSpace(arguments) ? presetArguments : arguments!.Trim());
+    }
+
+    /// <summary>
     /// The logo shown for a chat started from <paramref name="preset"/>: "claude", "cursor", or null. Only the built-in
     /// presets have one; a custom command never does, whatever it runs.
     /// </summary>

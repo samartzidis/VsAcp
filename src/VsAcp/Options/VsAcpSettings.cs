@@ -28,23 +28,15 @@ internal static class VsAcpSettings
     /// <summary>
     /// Turns a settings read into the effective agent command line. <paramref name="reader"/> may be null
     /// (Unified Settings unavailable), which yields the declared defaults. A preset cannot populate the
-    /// command fields, so it is resolved here and the fields only appear for "Custom". An unknown preset
-    /// value is treated as Cursor, the default.
+    /// command fields, so they are blank by default and <see cref="AgentPresets.Resolve"/> fills each blank one
+    /// from the preset; a value typed in a field overrides the preset's.
     /// </summary>
     internal static AgentSettings Read(ISettingsReader? reader)
     {
-        var preset = ReadValue(reader, PresetMoniker, AgentPresets.Cursor);
-        string command, arguments;
-        if (preset == AgentPresets.Custom)
-        {
-            command = ReadValue(reader, AgentCommandMoniker, AgentPresets.CursorCommand);
-            arguments = ReadValue(reader, AgentArgumentsMoniker, AgentPresets.CursorArguments);
-        }
-        else
-        {
-            if (AgentPresets.CommandLine(preset) is null) preset = AgentPresets.Cursor;
-            (command, arguments) = AgentPresets.CommandLine(preset)!.Value;
-        }
+        var (preset, command, arguments) = AgentPresets.Resolve(
+            ReadValue(reader, PresetMoniker, AgentPresets.Cursor),
+            ReadValue(reader, AgentCommandMoniker, ""),
+            ReadValue(reader, AgentArgumentsMoniker, ""));
         return new AgentSettings(preset, command, arguments,
             ReadValue(reader, EnableChatDevToolsMoniker, false),
             ReadValue(reader, EnableFileLoggingMoniker, true),

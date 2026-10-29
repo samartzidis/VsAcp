@@ -79,6 +79,7 @@
       <VSIXSubPath>UnifiedSettings</VSIXSubPath>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!-- The pkgdef's SettingsManifests CacheTag comes from the compiled assembly: without this a JSON-only edit leaves the tag, so VS keeps its cached settings page. --><CustomAdditionalCompileInputs Include="UnifiedSettings\registration.json" />
     <!-- Referenced by source.extension.vsixmanifest's <Icon> element. -->
     <Content Include="Resources\Icon.png">
       <IncludeInVSIX>true</IncludeInVSIX>

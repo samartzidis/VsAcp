@@ -3,7 +3,7 @@
     "acpAgent.preset": {
       "type": "string",
       "title": "Preset",
-      "description": "Cursor Agent runs 'agent acp'. Claude Code runs 'npx @agentclientprotocol/claude-agent-acp --yes'. Choose Custom to enter the command and arguments yourself.",
+      "description": "Cursor Agent runs 'agent acp'. Claude Code runs 'npx @agentclientprotocol/claude-agent-acp --yes'. Custom has no command of its own: it runs the fields below, falling back to Cursor's for any left blank, and shows no agent logo.",
       "default": "cursor",
       "enum": [ "cursor", "claudeCode", "custom" ],
       "enumItemLabels": [ "Cursor Agent", "Claude Code", "Custom" ],
@@ -12,17 +12,25 @@
     "acpAgent.agentCommand": {
       "type": "string",
       "title": "Agent command",
-      "description": "Executable to launch as the ACP agent process.",
-      "default": "agent",
-      "visibleWhen": "${config:acpAgent.preset} == 'custom'",
+      "description": "Executable to launch as the ACP agent process. Leave blank to use the preset's command; a value here overrides it.",
+      "default": "",
+      "messages": [
+        { "text": "Blank runs: agent", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
+        { "text": "Blank runs: npx", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
+        { "text": "Blank runs: agent (Cursor's)", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
+      ],
       "order": 1
     },
     "acpAgent.agentArguments": {
       "type": "string",
       "title": "Agent arguments",
-      "description": "Command-line arguments passed to the agent process.",
-      "default": "acp",
-      "visibleWhen": "${config:acpAgent.preset} == 'custom'",
+      "description": "Command-line arguments passed to the agent process. Leave blank to use the preset's arguments; a value here replaces them, so include the preset's own arguments when adding a flag.",
+      "default": "",
+      "messages": [
+        { "text": "Blank runs: acp", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
+        { "text": "Blank runs: @agentclientprotocol/claude-agent-acp --yes", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
+        { "text": "Blank runs: acp (Cursor's)", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
+      ],
       "order": 2
     },
     "acpAgent.enableIdeTools": {

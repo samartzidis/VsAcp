@@ -317,6 +317,9 @@ public partial class TabbedChatControl : UserControl
                 case "settings.open":
                     UiThread.Post("settings.open", VsAcpPackage.OpenSettings);
                     break;
+                case "logs.open":
+                    UiThread.Post("logs.open", VsAcpPackage.ShowLogs);
+                    break;
                 case "folders.add":
                     // Not inside the WebView2 message callback: the folder dialog is modal.
                     UiThread.Post("folders.add", PickAndAddFolder);

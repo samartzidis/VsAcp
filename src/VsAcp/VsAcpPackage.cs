@@ -395,6 +395,25 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
 
     private static readonly Guid OutputPaneGuid = new("7E2A4A6B-1F3C-4D8E-9B5C-2A1D3E4F6B7A");
 
+    /// <summary>Shows the Output window and selects the VsAcp pane in it.</summary>
+    internal static void ShowLogs()
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        if (_instance is not { } package)
+            return;
+
+        // The window first: activating a pane alone does not bring a hidden or collapsed Output window forward.
+        if (package.GetService(typeof(SVsUIShell)) is IVsUIShell shell)
+        {
+            var outputWindow = Microsoft.VisualStudio.VSConstants.StandardToolWindows.Output;
+            if (shell.FindToolWindow((uint)__VSFINDTOOLWIN.FTW_fForceCreate, ref outputWindow, out var frame) == Microsoft.VisualStudio.VSConstants.S_OK)
+                frame?.Show();
+        }
+
+        var hr = package.EnsureOutputPane()?.Activate();
+        Log.Information("[Logs] Open: Output window shown, VsAcp pane activate hr=0x{Hr:X8}", hr ?? -1);
+    }
+
     private IVsOutputWindowPane? EnsureOutputPane()
     {
         ThreadHelper.ThrowIfNotOnUIThread();

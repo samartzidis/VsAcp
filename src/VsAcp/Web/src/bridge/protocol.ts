@@ -301,6 +301,8 @@ export type PanelWebMessage =
   | { type: 'tabs.rename'; id: string; name: string }
   /** Opens Tools > Options at the ACP Agent settings page. */
   | { type: 'settings.open' }
+  /** Shows the Output window with the VsAcp pane selected. */
+  | { type: 'logs.open' }
   /** Opens the host's folder picker and shares the chosen folder with the agent. */
   | { type: 'folders.add' }
   | { type: 'folders.remove'; path: string }

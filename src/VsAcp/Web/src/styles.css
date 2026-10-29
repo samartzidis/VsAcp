@@ -727,17 +727,20 @@
   margin-left: 0;
 }
 
-/* first in the footer row, just left of the folders chip */
-.settings-btn {
+/* first in the footer row (settings, then the log), just left of the folders chip */
+.settings-btn,
+.logs-btn {
   margin-left: 0;
   color: var(--text-muted);
 }
 
-.settings-btn:hover {
+.settings-btn:hover,
+.logs-btn:hover {
   color: var(--text-primary);
 }
 
-.settings-btn:focus-visible {
+.settings-btn:focus-visible,
+.logs-btn:focus-visible {
   outline: 2px solid var(--text-primary);
   outline-offset: 1px;
 }

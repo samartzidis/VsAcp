@@ -221,14 +221,17 @@ describe('focus', () => {
 });
 
 describe('footer', () => {
-  test('the settings and the shared folders are there with no chat open', async () => {
+  test('the settings, the log and the shared folders are there with no chat open', async () => {
     await setTabs([]);
     assert.equal(await page.locator('.chat-view').count(), 0);
     await setPanel({ folders: { items: [], supported: null, canEdit: true } });
     assert.equal(await page.locator('.panel-footer .settings-btn').count(), 1);
+    assert.equal(await page.locator('.panel-footer .logs-btn').count(), 1);
     assert.equal(await page.locator('.panel-footer .folders-btn').count(), 1);
     await page.locator('.settings-btn').click();
     assert.deepEqual(await lastOf('settings.open'), { type: 'settings.open' });
+    await page.locator('.logs-btn').click();
+    assert.deepEqual(await lastOf('logs.open'), { type: 'logs.open' });
   });
 
   test('a drop with no chat open attaches nothing, but the folders chip still takes folders', async () => {
