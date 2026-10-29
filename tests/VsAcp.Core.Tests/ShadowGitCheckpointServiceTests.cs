@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using VsAcp.Core.Abstractions;
 using VsAcp.Core.Configuration;
 using VsAcp.Core.Services;
 using VsAcp.Core.Tests.Support;
@@ -321,6 +322,52 @@ public sealed class ShadowGitCheckpointServiceTests : IDisposable
         await service.RestoreAsync(checkpoint);
 
         Assert.True(_dir.Exists("tool.dll"));
+    }
+
+    // A reader that allows only other readers, as the workspace scan's File.ReadAllText is: the restore's exclusive
+    // write to the same file fails while it is open. (2026-10-28: RevertFlowTests failed on a.txt about 1 run in 15.)
+    private FileStream HoldOpen(string relativePath) =>
+        new(_dir.Combine(relativePath), FileMode.Open, FileAccess.Read, FileShare.Read);
+
+    [Fact]
+    public async Task Restore_retries_a_file_another_process_holds_for_a_moment()
+    {
+        var service = NewService();
+        _dir.Write("a.txt", "before");
+        var checkpoint = await SnapshotAsync(service);
+        _dir.Write("a.txt", "after");
+
+        var held = HoldOpen("a.txt");
+        // A dedicated thread, not Task.Run/Task.Delay: on a starved pool the release would come after the retries gave up.
+        new Thread(() => { Thread.Sleep(300); held.Dispose(); }) { IsBackground = true }.Start();
+        var result = await service.RestoreAsync(checkpoint);
+
+        Assert.Empty(result.Failed);
+        Assert.Equal("before", _dir.Read("a.txt"));
+    }
+
+    [Fact]
+    public async Task A_file_that_stays_locked_is_listed_and_the_rest_of_the_restore_is_done()
+    {
+        var service = NewService();
+        _dir.Write("a.txt", "before");
+        _dir.Write("b.txt", "before");
+        _dir.Write("sub/c.txt", "before");
+        var checkpoint = await SnapshotAsync(service);
+        _dir.Write("a.txt", "after");
+        _dir.Write("b.txt", "after");
+        _dir.Write("sub/c.txt", "after");
+        _dir.Write("created.txt", "new");
+
+        RestoreResult result;
+        using (HoldOpen("a.txt")) // a.txt comes first in the snapshot, so the others prove the restore went on
+            result = await service.RestoreAsync(checkpoint);
+
+        Assert.Equal(new[] { "a.txt" }, result.Failed);
+        Assert.Equal("after", _dir.Read("a.txt")); // untouched
+        Assert.Equal("before", _dir.Read("b.txt"));
+        Assert.Equal("before", _dir.Read("sub/c.txt"));
+        Assert.False(_dir.Exists("created.txt"), _log.ToString());
     }
 
     [Fact]

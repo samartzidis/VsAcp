@@ -193,8 +193,50 @@ public sealed class ChatHarness : IDisposable
     {
         var sending = SendAsync(text);
         if (await Task.WhenAny(sending, Task.Delay(timeoutMs)) != sending)
-            throw new TimeoutException($"The turn did not finish within {timeoutMs} ms.\n{Log}");
+            throw new TimeoutException($"The turn did not finish within {timeoutMs} ms.\n{Diagnostics()}\n{Log}");
         return await sending;
+    }
+
+    /// <summary>
+    /// What a timed-out wait needs to tell a slow run from a stuck one: whether the thread pool was starved, how many
+    /// agents were alive in this test process, and how far this test's agent got. Each running agent holds two pool
+    /// threads (the blocking stdout and stderr reads on net472), and past its minimum the pool adds about one thread
+    /// every 500 ms, so busy workers above the minimum point at starvation (ChatFlowTests.Permission_request_waits_...
+    /// timed out once in 10 full runs, with no <c>session/prompt</c> sent).
+    /// </summary>
+    public string Diagnostics()
+    {
+        try
+        {
+            ThreadPool.GetMinThreads(out var minWorker, out var minIo);
+            ThreadPool.GetMaxThreads(out var maxWorker, out var maxIo);
+            ThreadPool.GetAvailableThreads(out var freeWorker, out var freeIo);
+            var busyWorker = maxWorker - freeWorker;
+
+            var agents = Process.GetProcessesByName("VsAcp.FakeAgent");
+            var agentCount = agents.Length;
+            foreach (var agent in agents) agent.Dispose();
+
+            string received;
+            try
+            {
+                received = string.Join(", ", AgentLog()
+                    .Where(e => (string?)e["dir"] == "in")
+                    .Select(e => (string?)e["name"]));
+            }
+            catch (Exception ex) { received = $"(agent log unreadable: {ex.Message})"; }
+
+            return "[diagnostics] "
+                + $"pool workers busy {busyWorker} (minimum {minWorker}{(busyWorker > minWorker ? ", ABOVE it: the pool is throttling growth" : "")}), "
+                + $"io busy {maxIo - freeIo} (minimum {minIo}); "
+                + $"threads in this process {Process.GetCurrentProcess().Threads.Count}; "
+                + $"FakeAgent processes alive {agentCount}; "
+                + $"this agent received: {(received.Length == 0 ? "(nothing)" : received)}";
+        }
+        catch (Exception ex)
+        {
+            return $"[diagnostics] unavailable: {ex.Message}";
+        }
     }
 
     /// <summary>Drains <see cref="AcpSessionService.SendMessageAsync"/> directly, for tests that need attachments.</summary>
@@ -256,7 +298,7 @@ public sealed class ChatHarness : IDisposable
         while (!condition())
         {
             if (DateTime.UtcNow > deadline)
-                throw new TimeoutException($"Timed out waiting for: {what}\n{Log}");
+                throw new TimeoutException($"Timed out waiting for: {what}\n{Diagnostics()}\n{Log}");
             await Task.Delay(25);
         }
     }

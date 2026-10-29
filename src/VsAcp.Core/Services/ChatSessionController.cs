@@ -403,12 +403,26 @@ public sealed class ChatSessionController : IDisposable
         // The coordinator reads the store to decide what to keep, so the latest messages must be in it.
         await FlushAsync();
 
-        var reverted = await new RevertCoordinator(_checkpointService, _chatService)
-            .RevertAsync(checkpointId, Store, SessionId, includeOther);
+        var coordinator = new RevertCoordinator(_checkpointService, _chatService);
+        var reverted = await coordinator.RevertAsync(checkpointId, Store, SessionId, includeOther);
 
         _queue.Post(_session.Clear);
         await RestoreAsync();
+
+        // After the reload, which clears transient lines: files another program kept open stay as they were.
+        if (coordinator.FailedFiles.Count > 0)
+            AddNotice(_nextId("revert-failed"),
+                $"**Not restored:** {FormatFiles(coordinator.FailedFiles)} could not be changed, because another program has " +
+                "it open or locked. It keeps its current content; everything else was reverted.");
         return reverted;
+    }
+
+    // Up to five names, then a count of the rest, so a notice stays one short line.
+    private static string FormatFiles(IReadOnlyList<string> files)
+    {
+        const int Shown = 5;
+        var names = string.Join(", ", files.Take(Shown).Select(f => $"`{f}`"));
+        return files.Count > Shown ? $"{names} and {files.Count - Shown} more" : names;
     }
 
     // ---- fork ----
