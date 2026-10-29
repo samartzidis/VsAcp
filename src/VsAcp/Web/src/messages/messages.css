@@ -434,6 +434,9 @@
 .user-text {
   white-space: pre-wrap;
   word-break: break-word;
+  /* a pasted log or file would otherwise fill the whole chat: scroll inside the bubble past this height */
+  max-height: 240px;
+  overflow-y: auto;
 }
 
 .user-strip {

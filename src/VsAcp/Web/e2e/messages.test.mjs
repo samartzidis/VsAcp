@@ -37,6 +37,16 @@ describe('rendering', () => {
     assert.equal(await msgEl('u1').locator('b').count(), 0);
   });
 
+  test('a very long user message scrolls inside its bubble and still copies in full', async () => {
+    const text = Array.from({ length: 200 }, (_, i) => `log line ${i}`).join(String.fromCharCode(10));
+    await load(msg({ id: 'u1', type: 'User', content: text }));
+    const box = msgEl('u1').locator('.user-text');
+    const { client, scroll } = await box.evaluate((e) => ({ client: e.clientHeight, scroll: e.scrollHeight }));
+    assert.ok(client <= 240, `bubble text is capped (was ${client}px)`);
+    assert.ok(scroll > client, 'the rest is reachable by scrolling');
+    assert.match(await box.innerText(), /log line 199$/);
+  });
+
   test('an assistant message renders markdown with highlighted code', async () => {
     await load(msg({ id: 'a1', type: 'Assistant', content: '## Title\n\nsome **bold**\n\n```csharp\nvar x = 1;\n```' }));
     const el = msgEl('a1');
