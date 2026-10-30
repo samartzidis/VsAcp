@@ -129,6 +129,7 @@ internal sealed class ComposerBridge : IDisposable
         Placeholder: _vm.IsInitializing ? PlaceholderConnecting : PlaceholderReady,
         CanSend: _vm.SendCommand.CanExecute(null),
         Busy: _vm.IsBusy,
+        Reverting: _vm.IsReverting,
         Images: _vm.PendingImages.Select(i => new ImageChipDto(IdOf(i), i.FileName ?? "image")).ToList(),
         Files: _vm.PendingFiles.Select(f => new FileChipDto(IdOf(f), f.FileName, f.FilePath)).ToList(),
         AttachedFolders: _vm.PendingFolders.Select(f => new FolderChipDto(IdOf(f), f.FolderName, f.FolderPath)).ToList(),

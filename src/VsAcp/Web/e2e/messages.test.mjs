@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { msg } from '../dev/sample.ts';
-import { countOf, deliver, lastOf, page } from './harness.mjs';
+import { countOf, deliver, lastOf, page, setState } from './harness.mjs';
 
 const load = (...messages) => deliver({ type: 'messages.load', messages });
 const add = (message) => deliver({ type: 'messages.add', message });
@@ -283,6 +283,25 @@ describe('buttons and links', () => {
     await msgEl('u1').hover();
     await msgEl('u1').locator('.msg-fork-btn').click();
     assert.deepEqual(await lastOf('fork'), { type: 'fork', messageId: 'u1' });
+  });
+
+  test('Revert and Fork are disabled while a revert runs, Copy is not', async () => {
+    await load(
+      msg({ id: 'u1', type: 'User', content: 'question', checkpointId: 'cp-7' }),
+      msg({ id: 'a1', type: 'Assistant', content: 'reply' }),
+    );
+    await setState({ reverting: true });
+    for (const selector of ['#msg-u1 .msg-revert-btn', '#msg-u1 .msg-fork-btn', '#msg-a1 .msg-fork-btn'])
+      assert.equal(await page.locator(selector).isDisabled(), true, selector);
+    assert.equal(await msgEl('u1').locator('.msg-copy-btn').isDisabled(), false);
+    await msgEl('u1').hover();
+    await msgEl('u1').locator('.msg-revert-btn').click({ force: true });
+    assert.equal(await countOf('revert'), 0);
+
+    await setState({ reverting: false });
+    assert.equal(await msgEl('u1').locator('.msg-revert-btn').isDisabled(), false);
+    await msgEl('u1').locator('.msg-revert-btn').click();
+    assert.equal(await countOf('revert'), 1);
   });
 
   test('Copy puts the message text on the clipboard and flashes a confirmation', async () => {

@@ -306,7 +306,14 @@ public partial class TabbedChatControl : UserControl
                     if (SessionOf(m) is { } shown) ActivateTab(shown);
                     break;
                 case "tabs.close":
-                    if (SessionOf(m) is { } closing) _sessions?.RemoveSessionCommand.Execute(closing);
+                    if (SessionOf(m) is not { } closing) break;
+                    // closing deletes the chat, which a running revert is still writing to and its agent still forking
+                    if (_tabs.TryGetValue(closing.Id, out var reverting) && reverting.ViewModel is { IsReverting: true })
+                    {
+                        Serilog.Log.Information("[Tab] Not closing {Id}: a revert is running", closing.Id);
+                        break;
+                    }
+                    _sessions?.RemoveSessionCommand.Execute(closing);
                     break;
                 case "tabs.rename":
                     if (SessionOf(m) is { } renamed) Rename(renamed, m.GetProperty("name").GetString() ?? "");

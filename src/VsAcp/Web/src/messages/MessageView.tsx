@@ -50,13 +50,14 @@ function CopyButton({ getText }: { getText: () => string }) {
 }
 
 function ForkButton({ messageId }: { messageId: string }) {
-  const { post } = useChat();
+  const { post, reverting } = useChat();
   return (
     <button
       type="button"
       class="msg-action-btn msg-fork-btn"
       title="Fork from here: continue in a new chat"
       aria-label="Fork from here"
+      disabled={reverting.value}
       onClick={(e) => {
         e.stopPropagation();
         post({ type: 'fork', messageId });
@@ -80,7 +81,7 @@ function Chips({ items, glyph = '📄 ' }: { items: { text: string; title?: stri
 }
 
 function UserMessage({ m }: { m: ChatMessage }) {
-  const { post } = useChat();
+  const { post, reverting } = useChat();
   const content = useRef<HTMLDivElement>(null);
   return (
     <div id={'msg-' + m.id} class="msg msg-user" data-type="User">
@@ -108,6 +109,7 @@ function UserMessage({ m }: { m: ChatMessage }) {
             class="msg-action-btn msg-revert-btn"
             title="Revert to here"
             aria-label="Revert to here"
+            disabled={reverting.value}
             onClick={(e) => {
               e.stopPropagation();
               post({ type: 'revert', checkpointId: m.checkpointId! });

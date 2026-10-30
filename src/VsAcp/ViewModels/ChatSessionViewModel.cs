@@ -51,6 +51,16 @@ public partial class ChatSessionViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
     private bool _isRevertConfirmPending;
 
+    /// <summary>
+    /// True while a "Revert to here" runs, from the click until the chat is reloaded, except while its confirmation
+    /// is open: the page says "Reverting...", offers no Stop and disables the Revert and Fork buttons, and the tab
+    /// cannot be closed. Set by the tab around the whole flow; sending is blocked by <see cref="IsBusy"/> and
+    /// <see cref="IsRevertConfirmPending"/>.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+    private bool _isReverting;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
     [NotifyPropertyChangedFor(nameof(IsInputAllowed))]
@@ -581,7 +591,8 @@ public partial class ChatSessionViewModel : ObservableObject, IDisposable
         RequestScroll();
     }
 
-    private bool CanStop() => IsBusy;
+    // a revert is busy too, but has no turn to stop
+    private bool CanStop() => IsBusy && !IsReverting;
 
     [RelayCommand(CanExecute = nameof(CanStop))]
     private void Stop()

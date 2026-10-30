@@ -107,7 +107,7 @@ export function Composer() {
       post({ type: 'composer.send', text: ctrl.text, commandName: ctrl.commandName });
       return;
     }
-    if (e.key === 'Escape' && composer.peek().busy) {
+    if (e.key === 'Escape' && composer.peek().busy && !composer.peek().reverting) {
       e.preventDefault();
       post({ type: 'composer.stop' });
       return;

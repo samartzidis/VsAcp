@@ -98,6 +98,11 @@ export interface ComposerState {
   placeholder: string;
   canSend: boolean;
   busy: boolean;
+  /**
+   * A revert is running, from the click until the chat is reloaded (not while its confirmation is open): the busy
+   * line says "Reverting...", there is no Stop, and the Revert and Fork buttons are disabled.
+   */
+  reverting: boolean;
   images: ImageChip[];
   files: FileChip[];
   attachedFolders: FolderChip[];
@@ -347,6 +352,7 @@ export const emptyComposerState: ComposerState = {
   placeholder: 'Connecting to agent...',
   canSend: false,
   busy: false,
+  reverting: false,
   images: [],
   files: [],
   attachedFolders: [],
