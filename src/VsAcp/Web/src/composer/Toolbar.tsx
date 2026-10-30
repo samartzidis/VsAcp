@@ -97,7 +97,12 @@ export function Toolbar() {
         )}
       </div>
       <div class="tb-right">
-        {!s.busy && s.canSend ? (
+        {/* a revert cannot be stopped: a disabled Send stands in for Stop */}
+        {s.reverting ? (
+          <button type="button" class="tb-btn send" title="Send (Enter)" disabled>
+            <SendIcon />
+          </button>
+        ) : !s.busy && s.canSend ? (
           <button
             type="button"
             class="tb-btn send"

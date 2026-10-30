@@ -56,6 +56,7 @@ internal sealed record ComposerStateDto(
     string Placeholder,
     bool CanSend,
     bool Busy,
+    bool Reverting,
     IReadOnlyList<ImageChipDto> Images,
     IReadOnlyList<FileChipDto> Files,
     IReadOnlyList<FolderChipDto> AttachedFolders,

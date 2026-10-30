@@ -13,6 +13,7 @@ export const defaultState: ComposerState = {
   placeholder: 'Ask a question or describe a task...',
   canSend: true,
   busy: false,
+  reverting: false,
   images: [],
   files: [],
   attachedFolders: [],

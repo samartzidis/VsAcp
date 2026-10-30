@@ -1,6 +1,6 @@
 import { createContext } from 'preact';
 import { useContext } from 'preact/hooks';
-import { signal, type Signal } from '@preact/signals';
+import { computed, signal, type ReadonlySignal, type Signal } from '@preact/signals';
 import { post as postToHost, postWithFiles as postFilesToHost } from './bridge/host';
 import { emptyComposerState, type Banner, type ComposerState, type TabWebMessage } from './bridge/protocol';
 import type { EditorController } from './composer/editorDom';
@@ -14,6 +14,11 @@ export interface Chat {
   readonly id: string;
   /** Latest composer snapshot from the host (everything except the text being typed). */
   readonly composer: Signal<ComposerState>;
+  /**
+   * Whether a revert is running, on its own so the message buttons it disables re-render only when it changes, not
+   * with every composer snapshot.
+   */
+  readonly reverting: ReadonlySignal<boolean>;
   /** The banner currently asking the user something, if any. A newer banner replaces an older one. */
   readonly banner: Signal<Banner | null>;
   /**
@@ -31,9 +36,11 @@ export interface Chat {
 }
 
 export function createChat(id: string): Chat {
+  const composer = signal<ComposerState>(emptyComposerState);
   return {
     id,
-    composer: signal<ComposerState>(emptyComposerState),
+    composer,
+    reverting: computed(() => composer.value.reverting),
     banner: signal<Banner | null>(null),
     editor: { current: null },
     messages: createMessageStore(),

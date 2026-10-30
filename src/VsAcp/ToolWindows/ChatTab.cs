@@ -51,22 +51,43 @@ internal sealed class ChatTab : IDisposable
     }
 
     /// <summary>
+    /// "Revert to here" from the page: confirm, then revert. <see cref="ChatSessionViewModel.IsReverting"/> is set from
+    /// the click until the chat is reloaded (off while the confirmation is open). Ignored while a turn is running - the
+    /// banner slot may be holding a permission or elicitation prompt the agent is waiting on - or while another revert
+    /// or its confirmation is.
+    /// </summary>
+    private async Task RevertAsync(ChatSessionViewModel viewModel, string checkpointId)
+    {
+        if (viewModel.IsBusy || viewModel.IsRevertConfirmPending || viewModel.IsReverting)
+        {
+            Serilog.Log.Information("[Revert] Ignored revert request for {Id}: busy={Busy} confirmPending={Pending} reverting={Reverting}",
+                checkpointId, viewModel.IsBusy, viewModel.IsRevertConfirmPending, viewModel.IsReverting);
+            return;
+        }
+
+        viewModel.IsReverting = true;
+        try
+        {
+            if (await ConfirmRevertAsync(viewModel, checkpointId) is not { } includeOther)
+                return;
+
+            viewModel.IsReverting = true;
+            await viewModel.RevertToMessageAsync(checkpointId, includeOther);
+        }
+        finally
+        {
+            viewModel.IsReverting = false;
+        }
+    }
+
+    /// <summary>
     /// Asks before "Revert to here" changes files. Returns null when the user cancels, else whether to restore
     /// every file (true: the user ticked "Also revert other changes", or the generic prompt was confirmed after
     /// the preview failed) or only the agent's (false). Reverts that change no files go ahead without a prompt;
     /// if the file list cannot be computed the user is still asked (generic message) rather than reverting blind.
-    /// Ignored (null) while a turn is running - the banner slot may be holding a permission or elicitation prompt
-    /// the agent is waiting on - or while another confirmation is open.
     /// </summary>
     private async Task<bool?> ConfirmRevertAsync(ChatSessionViewModel viewModel, string checkpointId)
     {
-        if (viewModel.IsBusy || viewModel.IsRevertConfirmPending)
-        {
-            Serilog.Log.Information("[Revert] Ignored revert request for {Id}: busy={Busy} confirmPending={Pending}",
-                checkpointId, viewModel.IsBusy, viewModel.IsRevertConfirmPending);
-            return null;
-        }
-
         RevertPreview? preview = null;
         try
         {
@@ -93,6 +114,8 @@ internal sealed class ChatTab : IDisposable
         try
         {
             viewModel.IsRevertConfirmPending = true;
+            // nothing is running while the user decides
+            viewModel.IsReverting = false;
             _channel!.ShowRevertConfirmBanner(preview, result =>
                 answer.TrySetResult(!result.Confirmed ? null : preview is null || result.IncludeOther));
             return await answer.Task;
@@ -122,17 +145,8 @@ internal sealed class ChatTab : IDisposable
         var channel = _channel = _page.OpenTab(sessionId);
 
         // Route revert requests from the page to this session's view model
-        _revertHandler = checkpointId =>
-        {
-            // a failure is logged by UiThread.Post (it used to go to Debug output only)
-            UiThread.Post("Revert", async () =>
-            {
-                if (await ConfirmRevertAsync(viewModel, checkpointId) is not { } includeOther)
-                    return;
-
-                await viewModel.RevertToMessageAsync(checkpointId, includeOther);
-            });
-        };
+        // a failure is logged by UiThread.Post (it used to go to Debug output only)
+        _revertHandler = checkpointId => UiThread.Post("Revert", () => RevertAsync(viewModel, checkpointId));
         channel.RevertRequested += _revertHandler;
 
         // "Fork from here": a new tab continues the conversation from that message

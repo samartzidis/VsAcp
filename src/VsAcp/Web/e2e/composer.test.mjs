@@ -243,6 +243,21 @@ describe('toolbar, attachments and status', () => {
     assert.equal(await page.locator('.busy-bar').count(), 0);
   });
 
+  test('a revert says "Reverting...", offers no Stop and ignores Escape', async () => {
+    // before the revert's own busy flag (the preview) and during it
+    for (const busy of [false, true]) {
+      await setState({ canSend: false, busy, reverting: true });
+      assert.equal((await page.locator('.busy-bar').innerText()).trim(), 'Reverting...');
+      assert.equal(await page.locator('.tb-btn.stop').count(), 0);
+      assert.equal(await page.locator('.tb-btn.send').isDisabled(), true);
+      await editor().click();
+      await page.keyboard.press('Escape');
+      assert.equal(await countOf('composer.stop'), 0);
+    }
+    await setState({ busy: false, reverting: false });
+    assert.equal(await page.locator('.busy-bar').count(), 0);
+  });
+
   // Windows with "Animation effects" off reaches WebView2 as reduced motion; a spinner that stops or fades says nothing about progress
   test('the spinner turns at the same speed when the system asks for reduced motion', async () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });

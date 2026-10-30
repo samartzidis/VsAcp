@@ -111,6 +111,13 @@
     opacity: 1;
     color: var(--link-text);
 }
+/* Revert and Fork while a revert runs: still shown on hover, visibly not clickable */
+.msg-action-btn:disabled,
+.msg:hover .msg-action-btn:disabled {
+    opacity: 0.3;
+    color: var(--text-muted);
+    cursor: default;
+}
 
 .msg-assistant {
     padding: 0 8px;

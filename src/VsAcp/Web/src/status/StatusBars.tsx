@@ -4,13 +4,14 @@ import { ChevronIcon, CloseIcon, KeepIcon } from '../composer/icons';
 import { useChat } from '../chat';
 import { FileBadge } from './FileBadge';
 
-/** "Thinking..." line shown while a turn is running. */
+/** "Thinking..." line shown while a turn is running, "Reverting..." while a revert is. */
 export function BusyBar() {
-  if (!useChat().composer.value.busy) return null;
+  const { busy, reverting } = useChat().composer.value;
+  if (!busy && !reverting) return null;
   return (
     <div class="busy-bar">
       <span class="busy-spinner" aria-hidden="true" />
-      Thinking...
+      {reverting ? 'Reverting...' : 'Thinking...'}
     </div>
   );
 }
