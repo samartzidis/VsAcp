@@ -43,6 +43,17 @@ export const CursorLogo = () => (
   </svg>
 );
 
+/** The pink invader (art/pink-invader.svg) for a custom agent command, in its own colours: the same in light and dark. */
+export const CustomAgentLogo = () => (
+  <svg class="icon agent-logo" width="22" height="15" viewBox="0 0 617 421" shape-rendering="crispEdges" aria-hidden="true">
+    <path
+      fill="#f7018d"
+      d="M112 0H166V56H112zM448 0H501V56H448zM0 56H55V112H0zM166 56H224V112H166zM390 56H448V112H390zM560 56H617V112H560zM0 112H55V164H0zM112 112H501V164H112zM560 112H617V164H560zM0 164H617V221H0zM0 221H617V259H0zM55 259H560V312H55zM112 312H166V370H112zM448 312H501V370H448zM55 370H112V421H55zM501 370H560V421H501z"
+    />
+    <path fill="#000000" d="M166 164H224V221H166zM390 164H448V221H390z" />
+  </svg>
+);
+
 export const StopIcon = () => (
   <svg class="icon" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
     <rect x="2" y="2" width="10" height="10" rx="2" ry="2" fill="currentColor" />

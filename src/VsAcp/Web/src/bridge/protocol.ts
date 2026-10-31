@@ -120,8 +120,8 @@ export interface ComposerState {
   folders: FoldersState | null;
   /** The extra folders this tab's agent session was started with; null until the session exists. May differ from `folders`. */
   activeFolders: SharedFolder[] | null;
-  /** The built-in preset this tab's agent was started from (its logo is shown in the toolbar); null for a custom command. */
-  agent: 'claude' | 'cursor' | null;
+  /** The preset this tab's agent was started from (its logo is shown in the toolbar); null for a chat saved without one. */
+  agent: 'claude' | 'cursor' | 'custom' | null;
 }
 
 export type AttachmentKind = 'image' | 'file' | 'folder' | 'selection';

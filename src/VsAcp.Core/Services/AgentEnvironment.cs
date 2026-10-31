@@ -7,6 +7,17 @@ namespace VsAcp.Core.Services;
 public static class AgentEnvironment
 {
     /// <summary>
+    /// Whether a row's "enabled" cell is on. A row saved before the column existed has no value, and a value that
+    /// cannot be read as a boolean is not an off switch either, so both count as enabled.
+    /// </summary>
+    public static bool IsEnabled(object? cell) => cell switch
+    {
+        bool enabled => enabled,
+        string text when bool.TryParse(text, out var parsed) => parsed,
+        _ => true,
+    };
+
+    /// <summary>
     /// Turns the rows into variables. Names and values are trimmed. A row with an empty name, or a name containing
     /// '=' (which Windows cannot hold), is ignored, and a later row replaces an earlier one with the same name
     /// (Windows names ignore case). An empty value is kept: it sets the variable to the empty string.
