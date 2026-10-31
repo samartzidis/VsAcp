@@ -35,6 +35,18 @@ public class AgentEnvironmentTests
         Assert.Equal("second", env["path"]);
     }
 
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData("true", true)]
+    [InlineData("False", false)]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    [InlineData("maybe", true)]
+    [InlineData(1, true)]
+    public void A_row_is_enabled_unless_its_cell_says_false(object? cell, bool expected) =>
+        Assert.Equal(expected, AgentEnvironment.IsEnabled(cell));
+
     [Fact]
     public void No_rows_is_no_variables()
     {
