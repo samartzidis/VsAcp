@@ -19,6 +19,8 @@ A Visual Studio extension that hosts AI coding agents - Claude Code, Cursor, or 
 - **Chat tool window** - multiple tabs, each a persistent session restored across VS restarts
 - **Inline file diffs** - agent edits are written straight to disk and shown as a Keep/Undo overlay in the editor, with a pending-changes list grouping the agent's own edits apart from shell/build/user changes
 - **Revert to here** - roll back a conversation and the workspace files it changed, via local shadow-git checkpoints; no project git repo required or touched
+- **Fork from here** - continue a chat from any message in a new tab, leaving the original as it is
+- **Agent presets** - Cursor, Claude Code or a **Custom** command line; the command and arguments can be overridden on any preset, each preset has its own list of environment variables (each row has an **Enabled** checkbox, and one setting switches them all off), and the composer toolbar shows the agent's logo
 - **Permission prompts** - per-tab auto-approve toggle, plus mode/model selection and session config options the agent advertises
 - **Elicitation** - renders an agent's structured form or URL request as an in-chat prompt
 - **Terminal support** - runs and streams output for commands the agent executes
@@ -32,8 +34,7 @@ A Visual Studio extension that hosts AI coding agents - Claude Code, Cursor, or 
 VsAcp tracks the **stable ACP v1 protocol**, not v2 or any unstable proposals:
 
 - **Subagents** - no UI for agent-delegated subagent runs; subagent sessions are an unstable ACP proposal, not part of the stable schema
-- **Message-level agent rollback** - the stable protocol has no way to rewind a session to an earlier message, so "Revert to here" works around it: it restores local files from a shadow-git checkpoint and re-primes the agent with the prior conversation as context, rather than truly rewinding the agent's own session state
-- **Session fork** (`session/fork`) - unstable in ACP, not implemented
+- **Message-level agent rollback** - the stable protocol has no way to rewind a session to an earlier message. "Revert to here" restores local files from a shadow-git checkpoint, and both it and "Fork from here" give the agent the earlier conversation through the unstable `session/fork` where the agent advertises it (Claude Code does); for agents that don't (Cursor), the agent is re-primed with the prior conversation as context instead of truly rewinding its own session state
 
 Separately, two methods that *are* in the stable v1 schema aren't wired up yet:
 
@@ -43,7 +44,7 @@ Separately, two methods that *are* in the stable v1 schema aren't wired up yet:
 
 - Visual Studio 2026 (18.10 or later)
 - Node.js (build-time only, for the chat UI)
-- An ACP-compliant agent CLI (e.g. `claude-code-acp`, Cursor's agent) configured under **Tools \> Options \> ACP Agent**
+- An ACP-compliant agent CLI (e.g. Claude Code via its ACP bridge, Cursor's agent) configured under **Tools \> Options \> ACP Agent**
 
 ### Claude Code agent setup
 
@@ -59,6 +60,10 @@ Run `claude` once from a terminal to install dependencies and complete login bef
 The built-in **Cursor** preset (**Tools \> Options \> ACP Agent**) runs `agent acp`, so it needs the [Cursor CLI](https://docs.cursor.com/en/cli/installation) installed (`agent` on `PATH`) and signed in - browser login is the default, or set `CURSOR_API_KEY` for unattended use.
 
 Run `agent login` once from a terminal to complete setup before using the preset in VsAcp.
+
+### Custom agent setup
+
+Choose the **Custom** preset (**Tools \> Options \> ACP Agent**) for any other ACP-compliant agent. It has no command of its own: fill in **Agent command** (required) and, if the agent needs them, **Agent arguments**. Variables the agent needs, such as an API key, go in **Custom agent environment variables**.
 
 ## Project layout
 
@@ -82,7 +87,7 @@ block-beta
 |:---|:---|
 |[`src/AcpProtocol`](src/AcpProtocol/README.md)|JSON-RPC transport and generated ACP schema types|
 |[`src/VsAcp.Core`](src/VsAcp.Core/README.md)|Agent process management, session/persistence/revert logic, independent of VS|
-|`src/VsAcp`|The VSIX itself: WPF tool window, WebView2 chat UI (Preact/TypeScript), VS integration|
+|`src/VsAcp`|The VSIX itself: a tool window that hosts a single WebView2 chat page (Preact/TypeScript) drawing the tabs and chats, plus the VS integration|
 |`tools/AcpProtocolSchemaGenerator`|Generates `AcpProtocol`'s C# types from the official ACP JSON schema|
 |`tests/`|Headless end-to-end tests against a scriptable fake ACP agent|
 

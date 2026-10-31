@@ -19,6 +19,7 @@ internal static class VsAcpSettings
     public const string EnableChatDevToolsMoniker = "acpAgent.enableChatDevTools";
     public const string EnableFileLoggingMoniker = "acpAgent.enableFileLogging";
     public const string EnableIdeToolsMoniker = "acpAgent.enableIdeTools";
+    public const string EnableEnvironmentMoniker = "acpAgent.enableEnvironment";
     public const string CursorEnvironmentMoniker = "acpAgent.cursorEnvironment";
     public const string ClaudeCodeEnvironmentMoniker = "acpAgent.claudeCodeEnvironment";
     public const string CustomEnvironmentMoniker = "acpAgent.customEnvironment";
@@ -26,7 +27,7 @@ internal static class VsAcpSettings
     public static readonly string[] AllMonikers =
     {
         PresetMoniker, AgentCommandMoniker, AgentArgumentsMoniker, EnableChatDevToolsMoniker, EnableFileLoggingMoniker,
-        EnableIdeToolsMoniker, CursorEnvironmentMoniker, ClaudeCodeEnvironmentMoniker, CustomEnvironmentMoniker,
+        EnableIdeToolsMoniker, EnableEnvironmentMoniker, CursorEnvironmentMoniker, ClaudeCodeEnvironmentMoniker, CustomEnvironmentMoniker,
     };
 
     /// <summary>
@@ -45,15 +46,17 @@ internal static class VsAcpSettings
             ReadValue(reader, EnableChatDevToolsMoniker, false),
             ReadValue(reader, EnableFileLoggingMoniker, true),
             ReadValue(reader, EnableIdeToolsMoniker, false),
-            new Dictionary<string, IReadOnlyDictionary<string, string>>
-            {
-                [AgentPresets.Cursor] = ReadEnvironment(reader, CursorEnvironmentMoniker),
-                [AgentPresets.ClaudeCode] = ReadEnvironment(reader, ClaudeCodeEnvironmentMoniker),
-                [AgentPresets.Custom] = ReadEnvironment(reader, CustomEnvironmentMoniker),
-            });
+            ReadValue(reader, EnableEnvironmentMoniker, true)
+                ? new Dictionary<string, IReadOnlyDictionary<string, string>>
+                {
+                    [AgentPresets.Cursor] = ReadEnvironment(reader, CursorEnvironmentMoniker),
+                    [AgentPresets.ClaudeCode] = ReadEnvironment(reader, ClaudeCodeEnvironmentMoniker),
+                    [AgentPresets.Custom] = ReadEnvironment(reader, CustomEnvironmentMoniker),
+                }
+                : null);
     }
 
-    /// <summary>A preset's list: one object per row with a "name" and a "value" (the shape registration.json declares).</summary>
+    /// <summary>A preset's list: one object per row with an "enabled" flag, a "name" and a "value" (the shape registration.json declares); a cleared row is skipped.</summary>
     static Dictionary<string, string> ReadEnvironment(ISettingsReader? reader, string moniker)
     {
         if (reader is null)
@@ -66,8 +69,9 @@ internal static class VsAcpSettings
                 Log.Warning("[Settings] Could not read {Moniker}: {Outcome} {Message}", moniker, result.Outcome, result.Message);
                 return new Dictionary<string, string>();
             }
-            return AgentEnvironment.Build(result.Value.Select(row =>
-                new KeyValuePair<string?, string?>(TextOf(row, "name"), TextOf(row, "value"))));
+            return AgentEnvironment.Build(result.Value
+                .Where(row => AgentEnvironment.IsEnabled(row.TryGetValue("enabled", out var enabled) ? enabled : null))
+                .Select(row => new KeyValuePair<string?, string?>(TextOf(row, "name"), TextOf(row, "value"))));
         }
         catch (Exception ex)
         {
@@ -97,7 +101,8 @@ internal static class VsAcpSettings
 
 /// <summary>
 /// Effective values of the ACP Agent settings at one point in time. <paramref name="Environment"/> holds every
-/// preset's variables, keyed by preset: a saved chat takes its own preset's, not the selected one's.
+/// preset's variables, keyed by preset: a saved chat takes its own preset's, not the selected one's. It is null
+/// when "Pass environment variables to the agent" is cleared.
 /// </summary>
 internal sealed record AgentSettings(string Preset, string AgentCommand, string AgentArguments, bool EnableChatDevTools,
     bool EnableFileLogging, bool EnableIdeTools, IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? Environment = null)

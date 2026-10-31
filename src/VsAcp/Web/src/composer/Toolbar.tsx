@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Choice } from '../bridge/protocol';
 import { useChat } from '../chat';
-import { AttachIcon, ChevronIcon, ClaudeLogo, CursorLogo, FileIcon, SendIcon, ShieldIcon, StopIcon } from './icons';
+import { AttachIcon, ChevronIcon, ClaudeLogo, CursorLogo, CustomAgentLogo, FileIcon, SendIcon, ShieldIcon, StopIcon } from './icons';
 import { SessionFolders } from './SessionFolders';
 
 function Dropdown(props: { items: Choice[]; selectedId: string | null; title: string; onSelect(id: string): void }) {
@@ -63,6 +63,11 @@ export function Toolbar() {
         {s.agent === 'cursor' && (
           <span class="agent-badge" title="Cursor">
             <CursorLogo />
+          </span>
+        )}
+        {s.agent === 'custom' && (
+          <span class="agent-badge" title="Custom agent">
+            <CustomAgentLogo />
           </span>
         )}
         <Dropdown title="Select mode" items={s.modes} selectedId={s.modeId} onSelect={(id) => post({ type: 'composer.setMode', id })} />

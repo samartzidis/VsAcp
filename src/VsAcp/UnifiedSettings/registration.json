@@ -3,7 +3,7 @@
     "acpAgent.preset": {
       "type": "string",
       "title": "Preset",
-      "description": "Cursor Agent runs 'agent acp'. Claude Code runs 'npx @agentclientprotocol/claude-agent-acp --yes'. Custom has no command of its own: it runs the fields below, falling back to Cursor's for any left blank, and shows no agent logo.",
+      "description": "Cursor Agent runs 'agent acp'. Claude Code runs 'npx @agentclientprotocol/claude-agent-acp --yes'. Custom has no command of its own: it runs the fields below (the command is required) and shows the pink invader icon instead of an agent logo.",
       "default": "cursor",
       "enum": [ "cursor", "claudeCode", "custom" ],
       "enumItemLabels": [ "Cursor Agent", "Claude Code", "Custom" ],
@@ -17,7 +17,7 @@
       "messages": [
         { "text": "If blank: agent", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
         { "text": "If blank: npx", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
-        { "text": "If blank: agent (Cursor's)", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
+        { "text": "Required: Custom has no default command", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
       ],
       "order": 1
     },
@@ -29,17 +29,25 @@
       "messages": [
         { "text": "If blank: acp", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
         { "text": "If blank: @agentclientprotocol/claude-agent-acp --yes", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
-        { "text": "If blank: acp (Cursor's)", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
+        { "text": "If blank: no arguments", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
       ],
       "order": 2
+    },
+    "acpAgent.enableEnvironment": {
+      "type": "boolean",
+      "title": "Pass environment variables to the agent",
+      "description": "Master switch for the environment variable lists below. When cleared, no variables are passed to the agent, whatever each row's Enabled box says; the rows are kept.",
+      "default": true,
+      "order": 3
     },
     "acpAgent.cursorEnvironment": {
       "type": "array",
       "title": "Cursor environment variables",
-      "description": "Extra environment variables for the agent process.",
+      "description": "Extra environment variables for the agent process. Clear Enabled to keep a variable listed without passing it.",
       "items": {
         "type": "object",
         "properties": {
+          "enabled": { "type": "boolean", "title": "Enabled", "default": true },
           "name": { "type": "string", "title": "Name", "default": "" },
           "value": { "type": "string", "title": "Value", "default": "" }
         }
@@ -48,15 +56,16 @@
       "allowAdditionsAndRemovals": true,
       "allowItemEditing": true,
       "visibleWhen": "${config:acpAgent.preset} == 'cursor'",
-      "order": 3
+      "order": 4
     },
     "acpAgent.claudeCodeEnvironment": {
       "type": "array",
       "title": "Claude Code environment variables",
-      "description": "Extra environment variables for the agent process.",
+      "description": "Extra environment variables for the agent process. Clear Enabled to keep a variable listed without passing it.",
       "items": {
         "type": "object",
         "properties": {
+          "enabled": { "type": "boolean", "title": "Enabled", "default": true },
           "name": { "type": "string", "title": "Name", "default": "" },
           "value": { "type": "string", "title": "Value", "default": "" }
         }
@@ -65,15 +74,16 @@
       "allowAdditionsAndRemovals": true,
       "allowItemEditing": true,
       "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'",
-      "order": 4
+      "order": 5
     },
     "acpAgent.customEnvironment": {
       "type": "array",
       "title": "Custom agent environment variables",
-      "description": "Extra environment variables for the agent process.",
+      "description": "Extra environment variables for the agent process. Clear Enabled to keep a variable listed without passing it.",
       "items": {
         "type": "object",
         "properties": {
+          "enabled": { "type": "boolean", "title": "Enabled", "default": true },
           "name": { "type": "string", "title": "Name", "default": "" },
           "value": { "type": "string", "title": "Value", "default": "" }
         }
@@ -82,28 +92,28 @@
       "allowAdditionsAndRemovals": true,
       "allowItemEditing": true,
       "visibleWhen": "${config:acpAgent.preset} == 'custom'",
-      "order": 5
+      "order": 6
     },
     "acpAgent.enableIdeTools": {
       "type": "boolean",
       "title": "Let the agent read Visual Studio's state",
       "description": "Gives the agent read-only tools for Visual Studio: the Output window panes (Build, Debug, Tests and others, except the VsAcp pane), the open and active documents with the caret and selection, the solution's configuration and startup project, and whether a build or the debugger is running. Output can contain secrets, such as tokens in package-manager output. Applies when an agent next starts a session; the agent must support HTTP MCP servers.",
       "default": false,
-      "order": 6
+      "order": 7
     },
     "acpAgent.enableChatDevTools": {
       "type": "boolean",
       "title": "Enable chat DevTools",
       "description": "Right-clicking the chat panel shows 'Inspect' to open the WebView2 developer tools (after Visual Studio restarts). Disable in production.",
       "default": false,
-      "order": 7
+      "order": 8
     },
     "acpAgent.enableFileLogging": {
       "type": "boolean",
       "title": "Enable file logging",
       "description": "Writes the VsAcp log to %APPDATA%\\VsAcp\\logs (one file per day). The VsAcp pane in the Output window is always on. Takes effect immediately.",
       "default": true,
-      "order": 8
+      "order": 9
     }
   },
   "categories": {
