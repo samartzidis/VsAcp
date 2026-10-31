@@ -43,19 +43,14 @@ export const CursorLogo = () => (
   </svg>
 );
 
-/** A cute purple robot head for a custom agent command (brand-style colours, the same in light and dark). */
+/** The pink invader (art/pink-invader.svg) for a custom agent command, in its own colours: the same in light and dark. */
 export const CustomAgentLogo = () => (
-  <svg class="icon agent-logo" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-    <line x1="12" y1="5.5" x2="12" y2="3" stroke="#8B5CF6" stroke-width="1.5" stroke-linecap="round" />
-    <circle cx="12" cy="2.6" r="1.6" fill="#8B5CF6" />
-    <circle cx="2.8" cy="13" r="2" fill="#8B5CF6" />
-    <circle cx="21.2" cy="13" r="2" fill="#8B5CF6" />
-    {/* The head with the eyes and the smile cut out (even-odd), so the toolbar shows through them */}
+  <svg class="icon agent-logo" width="22" height="15" viewBox="0 0 617 421" shape-rendering="crispEdges" aria-hidden="true">
     <path
-      fill="#8B5CF6"
-      fill-rule="evenodd"
-      d="M10 5.5H14A6.5 6.5 0 0 1 20.5 12V13.5A6.5 6.5 0 0 1 14 20H10A6.5 6.5 0 0 1 3.5 13.5V12A6.5 6.5 0 0 1 10 5.5ZM8.4 10.2a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3ZM15.6 10.2a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3ZM9 16.1Q12 19.3 15 16.1Q12 16.7 9 16.1Z"
+      fill="#f7018d"
+      d="M112 0H166V56H112zM448 0H501V56H448zM0 56H55V112H0zM166 56H224V112H166zM390 56H448V112H390zM560 56H617V112H560zM0 112H55V164H0zM112 112H501V164H112zM560 112H617V164H560zM0 164H617V221H0zM0 221H617V259H0zM55 259H560V312H55zM112 312H166V370H112zM448 312H501V370H448zM55 370H112V421H55zM501 370H560V421H501z"
     />
+    <path fill="#000000" d="M166 164H224V221H166zM390 164H448V221H390z" />
   </svg>
 );
 

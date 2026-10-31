@@ -40,8 +40,8 @@ public static class AgentPresets
     }
 
     /// <summary>
-    /// The logo shown for a chat started from <paramref name="preset"/>: "claude", "cursor", "custom" (a generic
-    /// robot head, whatever the command runs) or null for a chat saved without a preset.
+    /// The logo shown for a chat started from <paramref name="preset"/>: "claude", "cursor", "custom" (the pink
+    /// invader, whatever the command runs) or null for a chat saved without a preset.
     /// </summary>
     public static string? Logo(string? preset) => preset switch
     {

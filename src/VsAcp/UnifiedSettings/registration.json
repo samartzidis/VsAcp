@@ -3,7 +3,7 @@
     "acpAgent.preset": {
       "type": "string",
       "title": "Preset",
-      "description": "Cursor Agent runs 'agent acp'. Claude Code runs 'npx @agentclientprotocol/claude-agent-acp --yes'. Custom has no command of its own: it runs the fields below (the command is required) and shows a generic purple robot icon instead of an agent logo.",
+      "description": "Cursor Agent runs 'agent acp'. Claude Code runs 'npx @agentclientprotocol/claude-agent-acp --yes'. Custom has no command of its own: it runs the fields below (the command is required) and shows the pink invader icon instead of an agent logo.",
       "default": "cursor",
       "enum": [ "cursor", "claudeCode", "custom" ],
       "enumItemLabels": [ "Cursor Agent", "Claude Code", "Custom" ],

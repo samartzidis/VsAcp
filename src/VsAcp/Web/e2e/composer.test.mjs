@@ -693,12 +693,12 @@ describe('agent logo in the toolbar', () => {
     assert.equal(await badge().count(), 0);
   });
 
-  test('shows a purple robot head for a custom agent', async () => {
+  test('shows the pink invader for a custom agent', async () => {
     await setState({ agent: 'custom' });
     assert.equal(await badge().count(), 1);
     assert.equal(await badge().getAttribute('title'), 'Custom agent');
-    assert.equal(await badge().locator('svg path').getAttribute('fill'), '#8B5CF6');
-    assert.equal(await badge().locator('svg path').getAttribute('fill-rule'), 'evenodd');
+    assert.equal(await badge().locator('svg path').first().getAttribute('fill'), '#f7018d');
+    assert.equal(await badge().locator('svg path').nth(1).getAttribute('fill'), '#000000');
     assert.equal(await page.locator('.toolbar .tb-left > :first-child').getAttribute('class'), 'agent-badge');
   });
 
