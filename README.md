@@ -4,7 +4,7 @@
 
 # Visual Studio ACP Agent
 
-Integrate Claude Code, Cursor and other agents directly into the Visual Studio IDE.
+Integrate Claude Code, Cursor and other ACP-compliant agents directly into the Visual Studio IDE.
 
 A Visual Studio extension that hosts AI coding agents - Claude Code, Cursor, or any other [Agent Client Protocol (ACP)](https://agentclientprotocol.com/) compliant agent - in a native chat tool window, integrating it to Visual Studio's files, editors, terminals, and permission system.
 
