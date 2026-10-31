@@ -3,7 +3,7 @@
                  xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
     <Identity Id="VsAcp.e5729d8a-9504-49b3-8d22-403148238d88"
-              Version="1.0.4"
+              Version="1.0.6"
               Language="en-US"
               Publisher="George Samartzidis" />
     <DisplayName>Visual Studio ACP Agent</DisplayName>
@@ -14,9 +14,9 @@
   </Metadata>
   <!--
     [17.14,) and not [18.x,): the Marketplace rejects any 18.x lower bound ([18.10,) per ADR-042, [18.0,) tried too) as
-    an experimental API version and asks for the latest stable one, 17.14. The range therefore also admits VS 2022
-    17.14, which is not supported (README: VS 2026 18.10 or later) and lacks Microsoft.Extensions.AI.Abstractions
-    (not shipped, see VsAcp.csproj): there the IDE tools turn themselves off and chats still work.
+    an experimental API version and asks for the latest stable one, 17.14. VS 2022 is kept out by the Core Editor
+    prerequisite below instead ([18.0,): VSIXInstaller greys VS 2022 out, "prerequisites that cannot be resolved";
+    the Marketplace accepts it).
   -->
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.14,)">
@@ -25,7 +25,7 @@
   </Installation>
   <Prerequisites>
     <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor"
-                  Version="[17.14,)"
+                  Version="[18.0,)"
                   DisplayName="Visual Studio core editor" />
   </Prerequisites>
   <Assets>
