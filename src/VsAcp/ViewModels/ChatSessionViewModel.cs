@@ -189,7 +189,7 @@ public partial class ChatSessionViewModel : ObservableObject, IDisposable
 
     public string WorkingDirectory { get; }
 
-    /// <summary>"claude" or "cursor" when this tab's agent was started from that built-in preset (<see cref="AgentPresets.Logo"/>), else null.</summary>
+    /// <summary>"claude", "cursor" or "custom" for the preset this tab's agent was started from (<see cref="AgentPresets.Logo"/>), null for a chat saved without one.</summary>
     public string? AgentLogo { get; }
 
     /// <summary>

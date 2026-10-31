@@ -48,8 +48,8 @@ internal sealed record FoldersDto(IReadOnlyList<FolderDto> Items, bool? Supporte
 /// Everything the composer shows except the text being typed. Sent whole whenever any of it changes.
 /// <c>ActiveFolders</c> is the list this tab's agent session was started with (null until the session
 /// exists); it can differ from the configured <c>Folders</c>.
-/// <c>Agent</c> is "claude" or "cursor" when the tab's agent was started from that built-in preset (its logo is shown),
-/// null for a custom command.
+/// <c>Agent</c> is "claude", "cursor" or "custom" for the preset the tab's agent was started from (its logo is shown),
+/// null for a chat saved without a preset.
 /// </summary>
 internal sealed record ComposerStateDto(
     bool Enabled,

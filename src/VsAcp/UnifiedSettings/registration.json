@@ -3,7 +3,7 @@
     "acpAgent.preset": {
       "type": "string",
       "title": "Preset",
-      "description": "Cursor Agent runs 'agent acp'. Claude Code runs 'npx @agentclientprotocol/claude-agent-acp --yes'. Custom has no command of its own: it runs the fields below, falling back to Cursor's for any left blank, and shows no agent logo.",
+      "description": "Cursor Agent runs 'agent acp'. Claude Code runs 'npx @agentclientprotocol/claude-agent-acp --yes'. Custom has no command of its own: it runs the fields below (the command is required) and shows a generic purple robot icon instead of an agent logo.",
       "default": "cursor",
       "enum": [ "cursor", "claudeCode", "custom" ],
       "enumItemLabels": [ "Cursor Agent", "Claude Code", "Custom" ],
@@ -17,7 +17,7 @@
       "messages": [
         { "text": "If blank: agent", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
         { "text": "If blank: npx", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
-        { "text": "If blank: agent (Cursor's)", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
+        { "text": "Required: Custom has no default command", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
       ],
       "order": 1
     },
@@ -29,7 +29,7 @@
       "messages": [
         { "text": "If blank: acp", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
         { "text": "If blank: @agentclientprotocol/claude-agent-acp --yes", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
-        { "text": "If blank: acp (Cursor's)", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
+        { "text": "If blank: no arguments", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
       ],
       "order": 2
     },

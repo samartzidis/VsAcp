@@ -43,6 +43,22 @@ export const CursorLogo = () => (
   </svg>
 );
 
+/** A cute purple robot head for a custom agent command (brand-style colours, the same in light and dark). */
+export const CustomAgentLogo = () => (
+  <svg class="icon agent-logo" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+    <line x1="12" y1="5.5" x2="12" y2="3" stroke="#8B5CF6" stroke-width="1.5" stroke-linecap="round" />
+    <circle cx="12" cy="2.6" r="1.6" fill="#8B5CF6" />
+    <circle cx="2.8" cy="13" r="2" fill="#8B5CF6" />
+    <circle cx="21.2" cy="13" r="2" fill="#8B5CF6" />
+    {/* The head with the eyes and the smile cut out (even-odd), so the toolbar shows through them */}
+    <path
+      fill="#8B5CF6"
+      fill-rule="evenodd"
+      d="M10 5.5H14A6.5 6.5 0 0 1 20.5 12V13.5A6.5 6.5 0 0 1 14 20H10A6.5 6.5 0 0 1 3.5 13.5V12A6.5 6.5 0 0 1 10 5.5ZM8.4 10.2a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3ZM15.6 10.2a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3ZM9 16.1Q12 19.3 15 16.1Q12 16.7 9 16.1Z"
+    />
+  </svg>
+);
+
 export const StopIcon = () => (
   <svg class="icon" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
     <rect x="2" y="2" width="10" height="10" rx="2" ry="2" fill="currentColor" />
