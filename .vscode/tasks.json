@@ -70,7 +70,7 @@
       }
     },
     {
-      "label": "build",
+      "label": "build (debug)",
       "type": "process",
       "command": "dotnet",
       "args": ["build", "${workspaceFolder}\\VsAcp.slnx", "--configuration", "Debug"],
