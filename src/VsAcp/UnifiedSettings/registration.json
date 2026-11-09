@@ -3,7 +3,7 @@
     "acpAgent.preset": {
       "type": "string",
       "title": "Preset",
-      "description": "Cursor Agent runs 'agent acp'. Claude Code runs 'npx @agentclientprotocol/claude-agent-acp --yes'. Custom has no command of its own: it runs the fields below (the command is required) and shows the pink invader icon instead of an agent logo.",
+      "description": "Cursor Agent runs 'agent acp'. Claude Code runs 'npx @agentclientprotocol/claude-agent-acp@0.102.0 --yes'. Custom has no command of its own: it runs the fields below (the command is required) and shows the pink invader icon instead of an agent logo.",
       "default": "cursor",
       "enum": [ "cursor", "claudeCode", "custom" ],
       "enumItemLabels": [ "Cursor Agent", "Claude Code", "Custom" ],
@@ -28,7 +28,7 @@
       "default": "",
       "messages": [
         { "text": "If blank: acp", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
-        { "text": "If blank: @agentclientprotocol/claude-agent-acp --yes", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
+        { "text": "If blank: @agentclientprotocol/claude-agent-acp@0.102.0 --yes", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
         { "text": "If blank: no arguments", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
       ],
       "order": 2

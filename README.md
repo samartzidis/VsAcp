@@ -48,7 +48,7 @@ Separately, two methods that *are* in the stable v1 schema aren't wired up yet:
 
 ### Claude Code agent setup
 
-The built-in **Claude Code** preset (**Tools \> Options \> ACP Agent**) runs `npx @agentclientprotocol/claude-agent-acp --yes`, so it needs:
+The built-in **Claude Code** preset (**Tools \> Options \> ACP Agent**) runs `npx @agentclientprotocol/claude-agent-acp@0.102.0 --yes` (the release VsAcp is tested against), so it needs:
 
 - **Node.js / npm** on `PATH` - `npx` fetches and runs the bridge package on demand, no separate install required
 - **The [Claude Code CLI](https://code.claude.com/docs/en/overview)** installed and signed in (`claude` on `PATH`, logged in via a Claude.ai subscription or an `ANTHROPIC_API_KEY`) - the bridge drives this CLI under the hood, so it needs its own working session

@@ -9,8 +9,8 @@ namespace VsAcp.Core.Tests;
 
 /// <summary>
 /// Skipped unless <c>VSACP_REAL_AGENT=1</c>: the test talks to the real agent on the user's account, spending
-/// real quota, and runs <c>npx @agentclientprotocol/claude-agent-acp --yes</c>, which fetches and executes
-/// whatever that package resolves to over the network.
+/// real quota, and runs <c>npx</c> on the pinned <see cref="AgentPresets.ClaudeCodePackage"/>, which fetches and
+/// executes that package over the network.
 /// <para>
 /// <b>Never set VSACP_REAL_AGENT in CI, a shell profile, a task, or any other automated or persistent place.</b>
 /// It must only ever be set by hand for a single local run. Nothing in this repo does today - keep it that way;
@@ -48,7 +48,7 @@ public class RealAgentTests
     private static void ClaudeAgentAcp(VsAcpOptions o)
     {
         o.AgentCommand = "npx";
-        o.AgentArgs = ["@agentclientprotocol/claude-agent-acp", "--yes"];
+        o.AgentArgs = [AgentPresets.ClaudeCodePackage, "--yes"];
     }
 
     private static string LastAnswer(ChatHarness h) =>
