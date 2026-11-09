@@ -428,3 +428,4 @@ specs/
 .vsacp
 *.lscache
 .memento.json
+.memory

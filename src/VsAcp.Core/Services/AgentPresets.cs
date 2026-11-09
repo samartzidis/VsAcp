@@ -13,7 +13,13 @@ public static class AgentPresets
     public const string CursorCommand = "agent";
     public const string CursorArguments = "acp";
     public const string ClaudeCodeCommand = "npx";
-    public const string ClaudeCodeArguments = "@agentclientprotocol/claude-agent-acp --yes";
+    /// <summary>
+    /// The claude-agent-acp release the Claude Code preset runs, and the one the real-agent tests run. Pinned so the
+    /// agent is the tested one on every machine: 0.85.0 answers "Session not found" for a forked session (a revert
+    /// breaks the tab). Raise it only after running the real-agent tests on the new release.
+    /// </summary>
+    public const string ClaudeCodePackage = "@agentclientprotocol/claude-agent-acp@0.102.0";
+    public const string ClaudeCodeArguments = ClaudeCodePackage + " --yes";
 
     /// <summary>The command line a built-in preset runs; null for <see cref="Custom"/> and unknown values.</summary>
     public static (string Command, string Arguments)? CommandLine(string? preset) => preset switch

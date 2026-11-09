@@ -13,14 +13,19 @@ public class AgentPresetsTests
     public void Each_known_preset_has_a_logo_and_a_chat_without_one_has_none(string? preset, string? logo) =>
         Assert.Equal(logo, AgentPresets.Logo(preset));
 
+    // npx reuses whatever copy is cached, so an unpinned preset can run an agent we never tested.
+    [Fact]
+    public void The_Claude_Code_preset_runs_a_pinned_agent_release() =>
+        Assert.Matches(@"^@agentclientprotocol/claude-agent-acp@\d+\.\d+\.\d+ ", AgentPresets.ClaudeCodeArguments);
+
     [Theory]
     // Blank fields take the preset's command line.
     [InlineData(AgentPresets.Cursor, "", "", AgentPresets.Cursor, "agent", "acp")]
-    [InlineData(AgentPresets.ClaudeCode, "", "", AgentPresets.ClaudeCode, "npx", "@agentclientprotocol/claude-agent-acp --yes")]
-    [InlineData(AgentPresets.ClaudeCode, null, null, AgentPresets.ClaudeCode, "npx", "@agentclientprotocol/claude-agent-acp --yes")]
-    [InlineData(AgentPresets.ClaudeCode, "  ", "\t", AgentPresets.ClaudeCode, "npx", "@agentclientprotocol/claude-agent-acp --yes")]
+    [InlineData(AgentPresets.ClaudeCode, "", "", AgentPresets.ClaudeCode, "npx", AgentPresets.ClaudeCodeArguments)]
+    [InlineData(AgentPresets.ClaudeCode, null, null, AgentPresets.ClaudeCode, "npx", AgentPresets.ClaudeCodeArguments)]
+    [InlineData(AgentPresets.ClaudeCode, "  ", "\t", AgentPresets.ClaudeCode, "npx", AgentPresets.ClaudeCodeArguments)]
     // Each field is resolved on its own.
-    [InlineData(AgentPresets.ClaudeCode, @"C:\tools\npx.cmd", "", AgentPresets.ClaudeCode, @"C:\tools\npx.cmd", "@agentclientprotocol/claude-agent-acp --yes")]
+    [InlineData(AgentPresets.ClaudeCode, @"C:\tools\npx.cmd", "", AgentPresets.ClaudeCode, @"C:\tools\npx.cmd", AgentPresets.ClaudeCodeArguments)]
     [InlineData(AgentPresets.ClaudeCode, "", "@agentclientprotocol/claude-agent-acp --yes --verbose", AgentPresets.ClaudeCode, "npx", "@agentclientprotocol/claude-agent-acp --yes --verbose")]
     [InlineData(AgentPresets.Cursor, "my-agent", "serve", AgentPresets.Cursor, "my-agent", "serve")]
     // Values are trimmed.
