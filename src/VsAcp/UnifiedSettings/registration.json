@@ -3,7 +3,7 @@
     "acpAgent.preset": {
       "type": "string",
       "title": "Preset",
-      "description": "Cursor Agent runs 'agent acp'. Claude Code runs 'npx @agentclientprotocol/claude-agent-acp@0.102.0 --yes'. Custom has no command of its own: it runs the fields below (the command is required) and shows the pink invader icon instead of an agent logo.",
+      "description": "Agent Preset.",
       "default": "cursor",
       "enum": [ "cursor", "claudeCode", "custom" ],
       "enumItemLabels": [ "Cursor Agent", "Claude Code", "Custom" ],
@@ -15,8 +15,8 @@
       "description": "Executable to launch as the ACP agent process. Leave blank to use the preset's command; a value here overrides it.",
       "default": "",
       "messages": [
-        { "text": "If blank: agent", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
-        { "text": "If blank: npx", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
+        { "text": "Default: agent", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
+        { "text": "Default: npx", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
         { "text": "Required: Custom has no default command", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
       ],
       "order": 1
@@ -27,9 +27,9 @@
       "description": "Command-line arguments passed to the agent process. Leave blank to use the preset's arguments; a value here replaces them, so include the preset's own arguments when adding a flag.",
       "default": "",
       "messages": [
-        { "text": "If blank: acp", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
-        { "text": "If blank: @agentclientprotocol/claude-agent-acp@0.102.0 --yes", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
-        { "text": "If blank: no arguments", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
+        { "text": "Default: acp", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'cursor'" },
+        { "text": "Default: @agentclientprotocol/claude-agent-acp@0.102.0 --yes", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'claudeCode'" },
+        { "text": "Default: no arguments", "severity": "informational", "visibleWhen": "${config:acpAgent.preset} == 'custom'" }
       ],
       "order": 2
     },

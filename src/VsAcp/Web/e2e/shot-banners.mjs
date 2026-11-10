@@ -1,12 +1,13 @@
 // Visual check (not a test): renders each banner in the dev harness and writes PNGs to e2e/.out/.
 import { createServer } from 'vite';
+import { devPage } from './devServer.mjs';
 import { chromium } from 'playwright-core';
 
 const server = await createServer({ configFile: 'vite.dev.config.ts', server: { open: false }, logLevel: 'error' });
 await server.listen();
 const browser = await chromium.launch({ channel: 'msedge', headless: true });
 const page = await browser.newPage({ viewport: { width: 460, height: 620 } });
-await page.goto('http://localhost:5199/dev/index.html');
+await page.goto(devPage(server));
 await page.waitForSelector('.editor[contenteditable="plaintext-only"]');
 
 const show = (banner) => page.evaluate((b) => window.__host.deliver({ type: 'banner.show', banner: b }), banner);

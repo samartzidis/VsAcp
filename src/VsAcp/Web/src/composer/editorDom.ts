@@ -1,7 +1,7 @@
 // DOM-level behaviour of the composer's editable surface: plain text with at most one slash-command
 // chip pinned at the very start. Kept free of Preact so the logic can be driven directly by tests.
 
-import { findSlashToken, type SlashToken } from './editorModel';
+import { findSlashToken, pasteOverflow, type SlashToken } from './editorModel';
 
 export const CHIP_CLASS = 'cmd-chip';
 
@@ -10,6 +10,8 @@ export interface EditorCallbacks {
   onChange(text: string, commandName: string | null): void;
   /** The caret moved or the content changed; the owner re-evaluates the slash popup. */
   onCaret(): void;
+  /** `insertText` refused a paste that would leave the input `over` characters past the limit; nothing was added. */
+  onPasteRefused?(over: number): void;
 }
 
 /** Plain text of a node/fragment: text nodes and <br> / block boundaries become characters; the chip is skipped. */
@@ -33,6 +35,11 @@ export function readText(node: Node): string {
   };
   walk(node);
   return out;
+}
+
+/** `text` as HTML that parses back to exactly `text`. */
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function createChip(name: string): HTMLSpanElement {
@@ -90,11 +97,22 @@ export class EditorController {
     this.notify();
   }
 
-  /** Inserts plain text at the caret (keeps the undo stack). */
+  /**
+   * Inserts plain text at the caret (keeps the undo stack). Refuses the whole text, adding nothing, when the input
+   * would end up past `PASTE_LIMIT` characters; `onPasteRefused` says by how much.
+   */
   insertText(text: string): void {
+    const over = pasteOverflow(this.text.length, text.length);
+    if (over > 0) {
+      this.cb.onPasteRefused?.(over);
+      return;
+    }
     this.root.focus();
     this.ensureCaretAfterChip();
-    if (!document.execCommand('insertText', false, text)) {
+    // insertHTML of the escaped text, not insertText: Chromium's insertText splits a multi-line text into one block per
+    // line, one line at a time (1,500 lines took 1.6 s, 5,000 took 20 s). insertHTML adds one text node in about 10 ms,
+    // keeps whitespace in this pre-wrap editor, and stays a single undo step.
+    if (!document.execCommand('insertHTML', false, escapeHtml(text))) {
       this.root.appendChild(document.createTextNode(text));
       this.placeCaretAtEnd();
     }

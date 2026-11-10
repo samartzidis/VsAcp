@@ -1,11 +1,12 @@
 import { createServer } from 'vite';
+import { devPage } from './devServer.mjs';
 import { chromium } from 'playwright-core';
 
 const server = await createServer({ configFile: 'vite.dev.config.ts', server: { open: false }, logLevel: 'error' });
 await server.listen();
 const browser = await chromium.launch({ channel: 'msedge', headless: true });
 const page = await browser.newPage({ viewport: { width: 420, height: 520 } });
-await page.goto('http://localhost:5199/dev/index.html');
+await page.goto(devPage(server));
 await page.waitForSelector('.editor[contenteditable="plaintext-only"]');
 await page.evaluate(() => window.__host.deliver({ type: 'state', state: { ...window.__host.defaultState,
   busy: true, pendingFiles: [

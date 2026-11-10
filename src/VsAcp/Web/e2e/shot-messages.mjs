@@ -1,5 +1,6 @@
 // Visual check (not a test): renders the sample conversation and writes PNGs to e2e/.out/.
 import { createServer } from 'vite';
+import { devPage } from './devServer.mjs';
 import { chromium } from 'playwright-core';
 
 const server = await createServer({ configFile: 'vite.dev.config.ts', server: { open: false }, logLevel: 'error' });
@@ -8,7 +9,7 @@ const browser = await chromium.launch({ channel: 'msedge', headless: true });
 const page = await browser.newPage({ viewport: { width: 480, height: 760 } });
 page.on('console', (m) => m.type() === 'error' && console.log('console error:', m.text()));
 page.on('pageerror', (e) => console.log('page error:', e.message));
-await page.goto('http://localhost:5199/dev/index.html?sample');
+await page.goto(devPage(server, '?sample'));
 await page.waitForSelector('.msg-assistant');
 await page.screenshot({ path: 'e2e/.out/messages.png' });
 

@@ -1,5 +1,31 @@
 import { describe, expect, test } from 'vitest';
-import { composePrompt, filterCommands, findSlashToken, moveIndex } from '../src/composer/editorModel';
+import {
+  PASTE_LIMIT,
+  composePrompt,
+  filterCommands,
+  findSlashToken,
+  moveIndex,
+  pasteOverflow,
+  pasteRefusal,
+} from '../src/composer/editorModel';
+
+describe('pasteOverflow', () => {
+  test('is zero while the result stays within the limit, even exactly at it', () => {
+    expect(pasteOverflow(0, 100)).toBe(0);
+    expect(pasteOverflow(10, PASTE_LIMIT - 10)).toBe(0);
+  });
+
+  test('counts the characters past the limit, with the text already in the input', () => {
+    expect(pasteOverflow(0, PASTE_LIMIT + 19899)).toBe(19899);
+    expect(pasteOverflow(100, PASTE_LIMIT)).toBe(100);
+  });
+
+  test('the notice names the overflow and the limit', () => {
+    expect(pasteRefusal(19899, 50000)).toBe(
+      'That paste is 19899 characters over the limit of 50000 · nothing was added, paste less of it',
+    );
+  });
+});
 
 describe('findSlashToken', () => {
   test('matches a lone slash and a partial command at the start', () => {

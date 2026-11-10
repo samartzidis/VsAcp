@@ -3,7 +3,7 @@ import type { SlashCommand } from '../bridge/protocol';
 import { useChat } from '../chat';
 import { Attachments } from './Attachments';
 import { EditorController } from './editorDom';
-import { filterCommands, moveIndex } from './editorModel';
+import { filterCommands, moveIndex, pasteRefusal } from './editorModel';
 import { SlashPopup } from './SlashPopup';
 import { Toolbar } from './Toolbar';
 
@@ -11,9 +11,13 @@ import { Toolbar } from './Toolbar';
 const OWN_POINTER_HANDLING =
   '.editor, button, a, input, select, textarea, label, [tabindex], [role="listbox"], [role="option"], [role="dialog"]';
 
+/** How long a refused-paste notice stays up on its own. */
+const PASTE_NOTICE_MS = 8000;
+
 export function Composer() {
-  const { composer, editor, post } = useChat();
+  const { composer, editor, pasteNotice, post } = useChat();
   const s = composer.value;
+  const notice = pasteNotice.value;
   const rootRef = useRef<HTMLDivElement>(null);
   const ctrlRef = useRef<EditorController | null>(null);
   const lastSent = useRef<{ text: string; command: string | null } | null>(null);
@@ -37,6 +41,7 @@ export function Composer() {
       onChange: (text, command) => {
         emptyRef.current = ctrl.isEmpty;
         dismissedRef.current = false;
+        pasteNotice.value = null;
         const prev = lastSent.current;
         if (!prev || prev.text !== text || prev.command !== command) {
           lastSent.current = { text, command };
@@ -52,6 +57,9 @@ export function Composer() {
           rerender(0);
         }
       },
+      onPasteRefused: (over) => {
+        pasteNotice.value = pasteRefusal(over);
+      },
     });
     ctrlRef.current = ctrl;
     editor.current = ctrl;
@@ -60,6 +68,13 @@ export function Composer() {
       editor.current = null;
     };
   }, []);
+
+  // A refusal fades on its own; the next accepted edit or the close button clears it sooner.
+  useEffect(() => {
+    if (notice === null) return;
+    const timer = setTimeout(() => (pasteNotice.value = null), PASTE_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   // The editor is not rendered by Preact, so its editability is applied imperatively.
   useEffect(() => {
@@ -145,6 +160,14 @@ export function Composer() {
 
   return (
     <div class="composer">
+      {notice !== null && (
+        <div class="paste-notice" role="alert">
+          <span class="paste-notice-text">{notice}</span>
+          <button type="button" class="paste-notice-close" aria-label="Dismiss" title="Dismiss" onClick={() => (pasteNotice.value = null)}>
+            {'×'}
+          </button>
+        </div>
+      )}
       <div class="composer-box" onMouseDown={onBoxMouseDown}>
         {matches.length > 0 && <SlashPopup commands={matches} selected={selected} onPick={acceptCommand} />}
         <Attachments />
