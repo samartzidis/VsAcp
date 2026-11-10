@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VsAcp.Core.Abstractions;
 using VsAcp.Core.Models;
+using VsAcp.Core.Services;
 
 namespace VsAcp.ViewModels;
 
@@ -80,10 +81,9 @@ public partial class SessionListViewModel : ObservableObject
         _sessionStore = sessionStore;
     }
 
-    public void Clear() => Sessions.Clear();
-
     /// <summary>
-    /// Loads previously saved sessions from the store into the Sessions collection.
+    /// Loads previously saved sessions from the store into the Sessions collection, replacing every entry (a
+    /// different solution: its tabs must be closed first).
     /// </summary>
     public async Task LoadSessionsAsync()
     {
@@ -93,21 +93,58 @@ public partial class SessionListViewModel : ObservableObject
         Sessions.Clear();
 
         foreach (var entry in entries.OrderByDescending(e => e.LastActivityUtc))
-        {
-            var info = new SessionInfo
-            {
-                PersistedId = entry.Id,
-                AgentCommand = entry.AgentCommand,
-                AgentArgs = entry.AgentArgs,
-                AgentPreset = entry.AgentPreset,
-                Name = entry.Title,
-                LastActivity = entry.LastActivityUtc.ToLocalTime(),
-                IsActive = false
-            };
-
-            Sessions.Add(info);
-        }
+            Sessions.Add(FromEntry(entry));
     }
+
+    /// <summary>
+    /// Re-reads the saved chats of the same solution (a reload) and brings the list up to date in place: an entry that
+    /// still stands for a saved chat stays the same object, so an open tab keeps its id, its running turn and its
+    /// agent. Entries with an open tab are left as they are.
+    /// </summary>
+    public async Task RefreshSessionsAsync(Func<SessionInfo, bool> isOpen)
+    {
+        if (_sessionStore is null) return;
+
+        var entries = await _sessionStore.GetSessionIndexAsync();
+        Apply(SessionListMerge.Plan(Sessions.ToList(), entries, s => s.PersistedId, isOpen));
+    }
+
+    /// <summary>The solution closed: keep only the chats with an open tab (the others come back on a reload).</summary>
+    public void KeepOpenSessions(Func<SessionInfo, bool> isOpen) =>
+        Apply(SessionListMerge.Plan(Sessions.ToList(), Array.Empty<SessionEntry>(), s => s.PersistedId, isOpen));
+
+    // Never removes an entry that is kept, so the page never sees an open tab disappear.
+    private void Apply(SessionListChanges<SessionInfo> changes)
+    {
+        foreach (var gone in changes.Removed)
+            Sessions.Remove(gone);
+
+        foreach (var (session, entry) in changes.Updated)
+        {
+            session.Name = entry.Title;
+            session.LastActivity = entry.LastActivityUtc.ToLocalTime();
+            session.AgentCommand = entry.AgentCommand;
+            session.AgentArgs = entry.AgentArgs;
+            session.AgentPreset = entry.AgentPreset;
+        }
+
+        foreach (var entry in changes.Added)
+            Sessions.Add(FromEntry(entry));
+
+        if (SelectedSession is not null && !Sessions.Contains(SelectedSession))
+            SelectedSession = null;
+    }
+
+    private static SessionInfo FromEntry(SessionEntry entry) => new()
+    {
+        PersistedId = entry.Id,
+        AgentCommand = entry.AgentCommand,
+        AgentArgs = entry.AgentArgs,
+        AgentPreset = entry.AgentPreset,
+        Name = entry.Title,
+        LastActivity = entry.LastActivityUtc.ToLocalTime(),
+        IsActive = false
+    };
 
     [RelayCommand]
     public async Task NewSessionAsync()

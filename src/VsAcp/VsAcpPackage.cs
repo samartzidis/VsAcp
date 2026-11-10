@@ -718,17 +718,19 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
         var previousDir = _previousSolutionDirectory ?? _solutionDirectory;
         if (string.Equals(previousDir, newSolutionDirectory, StringComparison.OrdinalIgnoreCase))
         {
-            // Same directory: this is a reload (e.g. triggered by checkpoint restore
-            // rewriting files). Restore state without closing chat tabs.
+            // Same directory: a reload (the agent or a checkpoint restore changed the .sln or a project, and VS
+            // reloaded it). Bring the list up to date in place: an open tab keeps its id, its running turn and its
+            // agent. Replacing the entries orphaned the open tab and started a second agent on the same session.
             _solutionDirectory = newSolutionDirectory;
             _previousSolutionDirectory = null;
             _sessionStore ??= new JsonSessionStore(newSolutionDirectory, !VsAcpPaths.IsNetworkPath(newSolutionDirectory), Microsoft.Extensions.Logging.Abstractions.NullLogger<JsonSessionStore>.Instance);
-            Serilog.Log.Information("[Workspace] Reload: {Dir}", newSolutionDirectory);
+            Serilog.Log.Information("[Workspace] Reload: {Dir} ({Open} open tab(s) kept)", newSolutionDirectory, _chatViewModels.Count);
             try
             {
                 await _sessionStore.EnsureWorkspaceAsync();
                 _sessionListViewModel.Initialize(_sessionStore);
-                await _sessionListViewModel.LoadSessionsAsync();
+                await JoinableTaskFactory.SwitchToMainThreadAsync();
+                await _sessionListViewModel.RefreshSessionsAsync(IsOpenTab);
             }
             catch (Exception ex)
             {
@@ -787,18 +789,18 @@ public sealed class VsAcpPackage : AsyncPackage, IVsSolutionEvents
     int IVsSolutionEvents.OnBeforeCloseSolution(object pUnkReserved) => Microsoft.VisualStudio.VSConstants.S_OK;
     int IVsSolutionEvents.OnAfterCloseSolution(object pUnkReserved)
     {
-        // Clear workspace state so the session list reflects "no solution open".
-        // Do NOT dispose or close chat tabs here: VS also fires OnAfterCloseSolution
-        // during a solution RELOAD (triggered by external file changes such as our
-        // checkpoint restore), followed immediately by OnAfterOpenSolution with the
-        // same directory. We save the current directory as _previousSolutionDirectory
-        // so SwitchWorkspaceAsync can tell a reload (same dir) from a genuine switch
-        // (different dir) and only close tabs in the latter case.
+        // VS fires this for a solution RELOAD too (an external change to the .sln or a project, e.g. by the agent),
+        // followed by OnAfterOpenSolution with the same directory, and VS offers no public way to tell the two apart
+        // here. So open tabs stay as they are (their turns and agents keep running): SwitchWorkspaceAsync refreshes
+        // the list in place for the same directory and closes every tab for a different one. Only the chats without
+        // an open tab leave the list: opened with no solution, they would start in the user profile folder.
         _previousSolutionDirectory = _solutionDirectory;
         _solutionDirectory = null;
-        _sessionListViewModel?.Clear();
+        _sessionListViewModel?.KeepOpenSessions(IsOpenTab);
         return Microsoft.VisualStudio.VSConstants.S_OK;
     }
+
+    private bool IsOpenTab(SessionInfo session) => _chatViewModels.ContainsKey(session.Id);
 
     int IVsSolutionEvents.OnAfterOpenProject(IVsHierarchy pHierarchy, int fAdded) => Microsoft.VisualStudio.VSConstants.S_OK;
     int IVsSolutionEvents.OnQueryCloseProject(IVsHierarchy pHierarchy, int fRemoving, ref int pfCancel) => Microsoft.VisualStudio.VSConstants.S_OK;
