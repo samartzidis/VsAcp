@@ -180,6 +180,57 @@ describe('paste', () => {
     await paste('', true);
     assert.equal((await lastOf('composer.paste')).hasImage, true);
   });
+
+  test('a single-line paste past the limit adds nothing and says by how much', async () => {
+    await editor().click();
+    assert.equal(await paste('x'.repeat(69899)), true);
+    assert.equal((await lastOf('composer.changed'))?.text ?? '', '');
+    assert.equal(
+      (await page.locator('.paste-notice').innerText()).replace(/\s*×\s*$/, ''),
+      'That paste is 19899 characters over the limit of 50000 · nothing was added, paste less of it',
+    );
+  });
+
+  test('a multi-line paste the host sends back is refused the same way, and the text already typed stays', async () => {
+    await editor().click();
+    await page.keyboard.type('keep');
+    await deliver({ type: 'composer.insert', text: ('y'.repeat(99) + '\n').repeat(500) });
+    assert.equal((await lastOf('composer.changed')).text, 'keep');
+    assert.match(await page.locator('.paste-notice').innerText(), /^That paste is 4 characters over the limit of 50000/);
+  });
+
+  test('the notice goes away on the next edit and with its close button', async () => {
+    await editor().click();
+    await paste('x'.repeat(50001));
+    assert.equal(await page.locator('.paste-notice').count(), 1);
+    await page.locator('.paste-notice-close').click();
+    assert.equal(await page.locator('.paste-notice').count(), 0);
+
+    await editor().click();
+    await paste('x'.repeat(50001));
+    assert.equal(await page.locator('.paste-notice').count(), 1);
+    await page.keyboard.type('a');
+    assert.equal(await page.locator('.paste-notice').count(), 0);
+  });
+
+  test('a long multi-line paste arrives intact without a block per line, and one Ctrl+Z takes it back', async () => {
+    // a block per line is what made a 1,500-line paste take seconds (insertText)
+    await editor().click();
+    await page.keyboard.type('keep ');
+    const text = Array.from({ length: 1500 }, (_, i) => `  line ${i}\t<b>x</b> &amp;  `).join('\n') + '\n';
+    await deliver({ type: 'composer.insert', text });
+    assert.equal((await lastOf('composer.changed')).text, 'keep ' + text);
+    assert.equal(await page.locator('.editor').evaluate((el) => el.querySelectorAll('div, br').length), 0, 'no block per line');
+    await page.keyboard.press('Control+z');
+    assert.equal((await lastOf('composer.changed')).text, 'keep ');
+  });
+
+  test('a paste that fills the input exactly to the limit is accepted', async () => {
+    await editor().click();
+    await paste('x'.repeat(50000));
+    assert.equal((await lastOf('composer.changed')).text.length, 50000);
+    assert.equal(await page.locator('.paste-notice').count(), 0);
+  });
 });
 
 describe('drag and drop', () => {

@@ -6,9 +6,10 @@ import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach } from 'node:test';
 import { createServer } from 'vite';
 import { chromium } from 'playwright-core';
+import { devPage } from './devServer.mjs';
 
-const URL = 'http://localhost:5199/dev/index.html';
-
+/** The page served by the dev server this harness started (its port comes from vite.dev.config.ts). */
+let pageUrl;
 let server;
 let browser;
 let current;
@@ -16,6 +17,7 @@ let current;
 before(async () => {
   server = await createServer({ configFile: 'vite.dev.config.ts', server: { open: false }, logLevel: 'error' });
   await server.listen();
+  pageUrl = devPage(server);
   browser = await chromium.launch({ channel: 'msedge', headless: true });
 });
 
@@ -26,7 +28,7 @@ after(async () => {
 
 beforeEach(async () => {
   current = await browser.newPage();
-  await current.goto(URL);
+  await current.goto(pageUrl);
   await current.waitForSelector('.editor[contenteditable="plaintext-only"]');
 });
 

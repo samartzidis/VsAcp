@@ -2,6 +2,7 @@
 // e2e/.out/theme-*.png. Each theme is delivered as the same `theme` message the host sends (anchors +
 // scheme); the anchor values are hand-written approximations, not captured from Visual Studio.
 import { createServer } from 'vite';
+import { devPage } from './devServer.mjs';
 import { chromium } from 'playwright-core';
 
 const themes = {
@@ -17,7 +18,7 @@ const browser = await chromium.launch({ channel: 'msedge', headless: true });
 
 for (const [name, theme] of Object.entries(themes)) {
   const page = await browser.newPage({ viewport: { width: 480, height: 760 } });
-  await page.goto('http://localhost:5199/dev/index.html?sample');
+  await page.goto(devPage(server, '?sample'));
   await page.waitForSelector('.msg-assistant');
   await page.evaluate((t) => window.__host.deliver({ type: 'theme', ...t }), theme);
   await page.locator('.thinking-header').click();

@@ -21,6 +21,8 @@ export interface Chat {
   readonly reverting: ReadonlySignal<boolean>;
   /** The banner currently asking the user something, if any. A newer banner replaces an older one. */
   readonly banner: Signal<Banner | null>;
+  /** Why the last paste or drop into the input was refused (too long), shown above the input until dismissed. */
+  readonly pasteNotice: Signal<string | null>;
   /**
    * The live editor, set by <Composer>. Host messages that change the text (`composer.set`, `composer.insert`,
    * `composer.focus`) act on it directly instead of going through state, because the page owns the text while the
@@ -42,6 +44,7 @@ export function createChat(id: string): Chat {
     composer,
     reverting: computed(() => composer.value.reverting),
     banner: signal<Banner | null>(null),
+    pasteNotice: signal<string | null>(null),
     editor: { current: null },
     messages: createMessageStore(),
     root: { current: null },

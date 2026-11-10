@@ -30,6 +30,18 @@ export function moveIndex(index: number, delta: number, count: number): number {
   return Math.min(count - 1, Math.max(0, index + delta));
 }
 
+/** The most characters a paste (or drop) may bring the input to; a bigger one is refused whole. */
+export const PASTE_LIMIT = 50000;
+
+/** How many characters inserting `pasted` characters into `current` would exceed `limit` by (0 when it fits). */
+export function pasteOverflow(current: number, pasted: number, limit: number = PASTE_LIMIT): number {
+  return Math.max(0, current + pasted - limit);
+}
+
+export function pasteRefusal(over: number, limit: number = PASTE_LIMIT): string {
+  return `That paste is ${over} characters over the limit of ${limit} · nothing was added, paste less of it`;
+}
+
 /** The prompt the agent receives: `/name rest` when a command chip is present, otherwise the plain text. */
 export function composePrompt(text: string, commandName: string | null): string {
   const body = text.trim();

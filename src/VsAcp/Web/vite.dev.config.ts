@@ -25,8 +25,21 @@ function vendorAssets(): Plugin {
   };
 }
 
+/**
+ * The dev server's port: `VSACP_DEV_PORT`, else 5199. Windows can reserve blocks of ports for Hyper-V networking
+ * (`netsh int ipv4 show excludedportrange protocol=tcp`), and binding a reserved port fails with EACCES; set the
+ * variable to a free port then. The e2e harness and the screenshot scripts take the URL from the server they start.
+ */
+function devPort(): number {
+  const value = process.env.VSACP_DEV_PORT;
+  if (!value) return 5199;
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`VSACP_DEV_PORT is not a port number: ${value}`);
+  return port;
+}
+
 // Dev harness / e2e server: serves dev/index.html with the mock host. Not part of the product build.
 export default defineConfig({
   plugins: [preact(), vendorAssets()],
-  server: { port: 5199, strictPort: true, open: '/dev/index.html?sample' },
+  server: { port: devPort(), strictPort: true, open: '/dev/index.html?sample' },
 });
